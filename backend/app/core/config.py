@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,6 +23,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str
     FERNET_KEY: str
 
+    OAUTHLIB_INSECURE_TRANSPORT: str | None = None
+
     @property
     def sync_database_url(self) -> str:
         if self.DATABASE_URL.startswith("postgresql+asyncpg://"):
@@ -35,7 +38,13 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    loaded_settings = Settings()
+
+    # Solo para desarrollo local.
+    if loaded_settings.OAUTHLIB_INSECURE_TRANSPORT:
+        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = loaded_settings.OAUTHLIB_INSECURE_TRANSPORT
+
+    return loaded_settings
 
 
 settings = get_settings()

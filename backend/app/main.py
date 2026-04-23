@@ -2,15 +2,15 @@ from fastapi import FastAPI
 
 from app import models  # noqa: F401
 from app.routers.auth import router as auth_router
-
+from app.routers.gmail_auth import router as gmail_auth_router
 
 app = FastAPI(
     title="SE Autograder API",
     version="0.1.0",
 )
 
-
 app.include_router(auth_router)
+app.include_router(gmail_auth_router)
 
 
 @app.get("/")
