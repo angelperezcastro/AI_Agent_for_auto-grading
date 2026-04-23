@@ -1,12 +1,12 @@
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from email.mime.text import MIMEText
 
+from fastapi import HTTPException, status
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +17,15 @@ from app.models import GmailAccount
 def parse_expiry(expiry_str: str | None):
     if not expiry_str:
         return None
-    return datetime.fromisoformat(expiry_str)
+
+    parsed = datetime.fromisoformat(expiry_str)
+
+    # google-auth compara contra datetimes naive en UTC.
+    # Si viene aware, lo convertimos a UTC y le quitamos tzinfo.
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+
+    return parsed
 
 
 def serialize_credentials(credentials: Credentials) -> dict:
