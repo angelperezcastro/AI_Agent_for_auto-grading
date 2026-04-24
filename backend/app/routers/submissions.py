@@ -10,10 +10,7 @@ from app.database import async_session_maker, get_db
 from app.deps import get_current_user
 from app.models import Enrollment, Project, Subject, Submission, User
 from app.schemas.core import SubmissionCreate, SubmissionRead
-from app.services.email_dispatch import (
-    send_professor_notification,
-    send_submission_confirmation,
-)
+from app.services.email_dispatch import send_submission_emails
 from app.services.submission_rules import check_submission_allowed
 
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
@@ -21,17 +18,9 @@ router = APIRouter(prefix="/submissions", tags=["Submissions"])
 logger = logging.getLogger(__name__)
 
 
-async def send_submission_confirmation_background(submission_id: int) -> None:
+async def send_submission_emails_background(submission_id: int) -> None:
     async with async_session_maker() as db:
-        await send_submission_confirmation(
-            submission_id=submission_id,
-            db=db,
-        )
-
-
-async def send_professor_notification_background(submission_id: int) -> None:
-    async with async_session_maker() as db:
-        await send_professor_notification(
+        await send_submission_emails(
             submission_id=submission_id,
             db=db,
         )
@@ -93,24 +82,13 @@ async def create_submission(
     )
 
     db.add(submission)
-
     enrollment.current_deliverable = payload.deliverable_number
 
     await db.commit()
     await db.refresh(submission)
 
-    background_tasks.add_task(
-        send_submission_confirmation_background,
-        submission.id,
-    )
-    background_tasks.add_task(
-        send_professor_notification_background,
-        submission.id,
-    )
-    background_tasks.add_task(
-        trigger_ai_evaluation_background,
-        submission.id,
-    )
+    background_tasks.add_task(send_submission_emails_background, submission.id)
+    background_tasks.add_task(trigger_ai_evaluation_background, submission.id)
 
     return submission
 
@@ -146,13 +124,6 @@ async def get_submission(
 
     elif current_user.role == "professor":
         project = await db.get(Project, enrollment.project_id)
-
-        if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found.",
-            )
-
         subject = await db.get(Subject, project.subject_id)
 
         if not subject or subject.professor_id != current_user.id:
@@ -193,13 +164,6 @@ async def list_submissions_for_enrollment(
 
     elif current_user.role == "professor":
         project = await db.get(Project, enrollment.project_id)
-
-        if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found.",
-            )
-
         subject = await db.get(Subject, project.subject_id)
 
         if not subject or subject.professor_id != current_user.id:

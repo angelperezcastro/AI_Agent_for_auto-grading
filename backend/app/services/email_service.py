@@ -44,12 +44,15 @@ async def get_gmail_service(
     db: AsyncSession,
 ):
     result = await db.execute(
-        select(GmailAccount).where(
+        select(GmailAccount)
+        .where(
             GmailAccount.account_email == account_email,
             GmailAccount.is_active.is_(True),
         )
+        .order_by(GmailAccount.id.desc())
     )
-    gmail_account = result.scalar_one_or_none()
+
+    gmail_account = result.scalars().first()
 
     if gmail_account is None:
         raise HTTPException(
