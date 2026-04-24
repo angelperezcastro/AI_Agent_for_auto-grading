@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum as PyEnum
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -54,7 +55,7 @@ class SubmissionStatus(str, PyEnum):
     OVERDUE = "overdue"
 
 
-def enum_values(enum_cls) -> list[str]:
+def enum_values(enum_cls: type[PyEnum]) -> list[str]:
     return [item.value for item in enum_cls]
 
 
@@ -349,7 +350,7 @@ class Evaluation(Base):
     )
 
     ai_score: Mapped[int] = mapped_column(Integer, nullable=False)
-    criteria_breakdown: Mapped[dict] = mapped_column(JSON, nullable=False)
+    criteria_breakdown: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     feedback: Mapped[str] = mapped_column(Text, nullable=False)
 
     evaluated_at: Mapped[datetime] = mapped_column(
@@ -388,6 +389,30 @@ class Evaluation(Base):
         back_populates="evaluation_overrides",
         foreign_keys=[override_by_professor_id],
     )
+
+    @property
+    def score(self) -> int:
+        """
+        Compatibility alias used by dispatcher/services.
+        The real persisted column is ai_score.
+        """
+        return self.ai_score
+
+    @score.setter
+    def score(self, value: int) -> None:
+        self.ai_score = value
+
+    @property
+    def criteria(self) -> dict[str, Any]:
+        """
+        Compatibility alias used by dispatcher/services.
+        The real persisted column is criteria_breakdown.
+        """
+        return self.criteria_breakdown
+
+    @criteria.setter
+    def criteria(self, value: dict[str, Any]) -> None:
+        self.criteria_breakdown = value
 
 
 class GmailAccount(Base):

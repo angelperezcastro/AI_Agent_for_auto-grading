@@ -5,7 +5,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.dispatcher import trigger_ai_evaluation
+from app.ai.dispatcher import run_evaluation
 from app.database import async_session_maker, get_db
 from app.deps import get_current_user
 from app.models import Enrollment, Project, Subject, Submission, User
@@ -19,15 +19,43 @@ logger = logging.getLogger(__name__)
 
 
 async def send_submission_emails_background(submission_id: int) -> None:
-    async with async_session_maker() as db:
-        await send_submission_emails(
-            submission_id=submission_id,
-            db=db,
+    """
+    Background task for the first two email triggers:
+    1. Confirmation email to student.
+    2. Notification email to professor.
+    """
+    try:
+        async with async_session_maker() as db:
+            await send_submission_emails(
+                submission_id=submission_id,
+                db=db,
+            )
+    except Exception:
+        logger.exception(
+            "Submission email background task failed for submission_id=%s",
+            submission_id,
         )
 
 
-async def trigger_ai_evaluation_background(submission_id: int) -> None:
-    await trigger_ai_evaluation(submission_id=submission_id)
+async def run_evaluation_background(submission_id: int) -> None:
+    """
+    Background task for the third email trigger:
+    Gemini evaluation + feedback email to student.
+
+    Uses a fresh DB session so the task does not reuse the request session
+    after the HTTP response has already been returned.
+    """
+    try:
+        async with async_session_maker() as db:
+            await run_evaluation(
+                submission_id=submission_id,
+                db=db,
+            )
+    except Exception:
+        logger.exception(
+            "AI evaluation background task failed for submission_id=%s",
+            submission_id,
+        )
 
 
 @router.post("", response_model=SubmissionRead, status_code=status.HTTP_201_CREATED)
@@ -82,13 +110,16 @@ async def create_submission(
     )
 
     db.add(submission)
+
+    # Keep the current deliverable locked until the dispatcher creates an Evaluation.
+    # The dispatcher will advance current_deliverable after successful/fallback evaluation.
     enrollment.current_deliverable = payload.deliverable_number
 
     await db.commit()
     await db.refresh(submission)
 
     background_tasks.add_task(send_submission_emails_background, submission.id)
-    background_tasks.add_task(trigger_ai_evaluation_background, submission.id)
+    background_tasks.add_task(run_evaluation_background, submission.id)
 
     return submission
 
@@ -124,6 +155,13 @@ async def get_submission(
 
     elif current_user.role == "professor":
         project = await db.get(Project, enrollment.project_id)
+
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found.",
+            )
+
         subject = await db.get(Subject, project.subject_id)
 
         if not subject or subject.professor_id != current_user.id:
@@ -164,6 +202,13 @@ async def list_submissions_for_enrollment(
 
     elif current_user.role == "professor":
         project = await db.get(Project, enrollment.project_id)
+
+        if not project:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found.",
+            )
+
         subject = await db.get(Subject, project.subject_id)
 
         if not subject or subject.professor_id != current_user.id:
@@ -184,4 +229,4 @@ async def list_submissions_for_enrollment(
         .order_by(Submission.deliverable_number.asc())
     )
 
-    return result.scalars().all()
+    return list(result.scalars().all())
