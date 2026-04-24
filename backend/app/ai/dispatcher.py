@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import os
 import traceback
 from datetime import datetime, timezone
@@ -11,7 +12,17 @@ from sqlalchemy.orm import selectinload
 
 from app.ai.evaluator import evaluate_by_deliverable_number
 from app.ai.prompts import CRITERIA_BY_DELIVERABLE
-from app.models import Enrollment, Evaluation, Project, Submission, User
+from app.models import (
+    EmailType,
+    Enrollment,
+    EnrollmentStatus,
+    Evaluation,
+    Project,
+    Submission,
+    SubmissionStatus,
+    User,
+)
+from app.services.email_log_service import log_email_attempt
 from app.services.email_resolver import resolve_sender_account
 from app.services.email_service import send_email
 from app.services.email_templates import feedback_email
@@ -21,97 +32,37 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 def _get_platform_url() -> str:
     return os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 
 def _student_display_name(student: User) -> str:
-    name = getattr(student, "name", None)
+    if getattr(student, "name", None):
+        return student.name
 
-    if name:
-        return str(name)
-
-    email = getattr(student, "email", None)
-
-    if email:
-        return str(email).split("@")[0]
+    if getattr(student, "email", None):
+        return student.email.split("@")[0]
 
     return "student"
 
 
 def _get_project_topic(project: Project) -> str:
-    topic = getattr(project, "topic", None)
+    if getattr(project, "topic", None):
+        return project.topic
 
-    if topic:
-        return str(topic)
+    if getattr(project, "description", None):
+        return project.description
 
-    description = getattr(project, "description", None)
-
-    if description:
-        return str(description)
-
-    name = getattr(project, "name", None)
-
-    if name:
-        return str(name)
+    if getattr(project, "name", None):
+        return project.name
 
     return "Software Engineering project"
-
-
-def _extract_criteria_breakdown(evaluation: Evaluation) -> dict[str, int]:
-    """
-    Supports several possible model field names, because your Evaluation model
-    may use criteria, criteria_breakdown, or rubric_scores.
-    """
-    for field_name in ("criteria", "criteria_breakdown", "rubric_scores"):
-        value = getattr(evaluation, field_name, None)
-        if isinstance(value, dict):
-            return value
-
-    return {}
-
-
-def _set_evaluation_criteria(evaluation: Evaluation, criteria: dict[str, int]) -> None:
-    """
-    Writes criteria to whichever JSON field exists in your Evaluation model.
-    """
-    for field_name in ("criteria", "criteria_breakdown", "rubric_scores"):
-        if hasattr(evaluation, field_name):
-            setattr(evaluation, field_name, criteria)
-            return
-
-    raise AttributeError(
-        "Evaluation model needs one JSON field named criteria, criteria_breakdown, or rubric_scores."
-    )
-
-
-def _get_score(evaluation: Evaluation) -> int:
-    score = getattr(evaluation, "score", None)
-
-    if score is None:
-        score = getattr(evaluation, "ai_score", None)
-
-    if score is None:
-        return 0
-
-    return int(score)
-
-
-def _get_feedback(evaluation: Evaluation) -> str:
-    feedback = getattr(evaluation, "feedback", None)
-
-    if feedback is None:
-        feedback = getattr(evaluation, "ai_feedback", None)
-
-    if feedback is None:
-        return ""
-
-    return str(feedback)
-
-
-def _set_optional_field(instance: Any, field_name: str, value: Any) -> None:
-    if hasattr(instance, field_name):
-        setattr(instance, field_name, value)
 
 
 def _build_previous_submissions_context(
@@ -119,17 +70,17 @@ def _build_previous_submissions_context(
 ) -> list[dict[str, Any]]:
     context: list[dict[str, Any]] = []
 
-    for previous in previous_submissions:
-        previous_evaluation = getattr(previous, "evaluation", None)
+    for previous_submission in previous_submissions:
+        previous_evaluation = previous_submission.evaluation
 
         item: dict[str, Any] = {
-            "deliverable_number": previous.deliverable_number,
-            "content": previous.content,
+            "deliverable_number": previous_submission.deliverable_number,
+            "content": previous_submission.content,
         }
 
         if previous_evaluation is not None:
-            item["score"] = _get_score(previous_evaluation)
-            item["feedback"] = _get_feedback(previous_evaluation)
+            item["score"] = previous_evaluation.ai_score
+            item["feedback"] = previous_evaluation.feedback
 
         context.append(item)
 
@@ -140,11 +91,6 @@ async def _fetch_submission_graph(
     submission_id: int,
     db: AsyncSession,
 ) -> tuple[Submission, Enrollment, User, Project]:
-    """
-    Fetches submission, enrollment, student and project.
-
-    This uses explicit queries to avoid relying too much on relationship names.
-    """
     submission = await db.get(Submission, submission_id)
 
     if submission is None:
@@ -173,12 +119,9 @@ async def _fetch_previous_submissions(
     deliverable_number: int,
     db: AsyncSession,
 ) -> list[Submission]:
-    """
-    Returns previous submissions for the same enrollment.
-    Attempts to load their evaluation relationship if it exists.
-    """
     stmt = (
         select(Submission)
+        .options(selectinload(Submission.evaluation))
         .where(
             Submission.enrollment_id == enrollment_id,
             Submission.deliverable_number < deliverable_number,
@@ -186,34 +129,41 @@ async def _fetch_previous_submissions(
         .order_by(Submission.deliverable_number.asc())
     )
 
-    try:
-        stmt = stmt.options(selectinload(Submission.evaluation))
-    except Exception:
-        # If the relationship is not named "evaluation", the evaluator still works
-        # without previous scores/feedback.
-        pass
-
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
+async def _get_existing_evaluation(
+    submission_id: int,
+    db: AsyncSession,
+) -> Evaluation | None:
+    stmt = select(Evaluation).where(Evaluation.submission_id == submission_id)
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def _save_success_evaluation(
     submission: Submission,
+    enrollment: Enrollment,
     result: dict[str, Any],
     db: AsyncSession,
 ) -> Evaluation:
     evaluation = Evaluation(
         submission_id=submission.id,
-        score=int(result["score"]),
+        ai_score=int(result["score"]),
+        criteria_breakdown=dict(result["criteria"]),
         feedback=str(result["feedback"]),
     )
 
-    _set_evaluation_criteria(evaluation, dict(result["criteria"]))
+    submission.status = SubmissionStatus.EVALUATED
 
-    _set_optional_field(evaluation, "evaluated_at", _utcnow())
-    _set_optional_field(evaluation, "created_at", _utcnow())
-    _set_optional_field(evaluation, "is_fallback", False)
-    _set_optional_field(evaluation, "error_message", None)
+    if submission.deliverable_number < 4:
+        enrollment.current_deliverable = max(
+            enrollment.current_deliverable,
+            submission.deliverable_number + 1,
+        )
+    else:
+        enrollment.status = EnrollmentStatus.COMPLETED
 
     db.add(evaluation)
     await db.commit()
@@ -224,6 +174,7 @@ async def _save_success_evaluation(
 
 async def _save_fallback_evaluation(
     submission: Submission,
+    enrollment: Enrollment,
     error: Exception,
     db: AsyncSession,
 ) -> Evaluation:
@@ -246,16 +197,21 @@ async def _save_fallback_evaluation(
 
     evaluation = Evaluation(
         submission_id=submission.id,
-        score=0,
+        ai_score=0,
+        criteria_breakdown=fallback_criteria,
         feedback=fallback_feedback,
     )
 
-    _set_evaluation_criteria(evaluation, fallback_criteria)
+    submission.status = SubmissionStatus.EVALUATED
+    submission.email_error = f"AI evaluation fallback used: {str(error)[:500]}"
 
-    _set_optional_field(evaluation, "evaluated_at", _utcnow())
-    _set_optional_field(evaluation, "created_at", _utcnow())
-    _set_optional_field(evaluation, "is_fallback", True)
-    _set_optional_field(evaluation, "error_message", str(error)[:1000])
+    if submission.deliverable_number < 4:
+        enrollment.current_deliverable = max(
+            enrollment.current_deliverable,
+            submission.deliverable_number + 1,
+        )
+    else:
+        enrollment.status = EnrollmentStatus.COMPLETED
 
     db.add(evaluation)
     await db.commit()
@@ -275,30 +231,30 @@ async def send_feedback_email(
     professor_comment: str | None = None,
     ai_score: int | None = None,
 ) -> None:
-    """
-    Sends the feedback email using the Gmail account resolved for the project.
-    """
-    sender_account = await resolve_sender_account(project.id, db)
+    sender_account = await _maybe_await(
+        resolve_sender_account(project.id, db)
+    )
 
-    student_name = _student_display_name(student)
-    project_name = getattr(project, "name", "Project")
-
-    score = _get_score(evaluation)
-    criteria_breakdown = _extract_criteria_breakdown(evaluation)
-    feedback_text = _get_feedback(evaluation)
+    sender_email = sender_account.account_email
 
     criteria_max_points = CRITERIA_BY_DELIVERABLE.get(
         submission.deliverable_number,
         {},
     )
 
+    score = (
+        evaluation.override_score
+        if is_override and evaluation.override_score is not None
+        else evaluation.ai_score
+    )
+
     html_body = feedback_email(
-        student_name=student_name,
+        student_name=_student_display_name(student),
         deliverable_num=submission.deliverable_number,
-        project_name=str(project_name),
         score=score,
-        criteria_breakdown=criteria_breakdown,
-        feedback_text=feedback_text,
+        criteria_breakdown=evaluation.criteria_breakdown,
+        feedback_text=evaluation.feedback,
+        project_name=project.name,
         platform_url=_get_platform_url(),
         criteria_max_points=criteria_max_points,
         is_override=is_override,
@@ -308,39 +264,76 @@ async def send_feedback_email(
 
     subject = (
         f"Feedback ready: Deliverable {submission.deliverable_number} "
-        f"for {project_name}"
+        f"for {project.name}"
     )
 
-    await send_email(
-        to=student.email,
-        subject=subject,
-        body_html=html_body,
-        gmail_account_email=sender_account.account_email,
-        db=db,
+    email_type = (
+        EmailType.OVERRIDE_FEEDBACK
+        if is_override
+        else EmailType.FEEDBACK
     )
+
+    try:
+        await _maybe_await(
+            send_email(
+                to=student.email,
+                subject=subject,
+                body_html=html_body,
+                gmail_account_email=sender_email,
+                db=db,
+            )
+        )
+
+        await log_email_attempt(
+            db=db,
+            submission_id=submission.id,
+            email_type=email_type,
+            recipient_email=student.email,
+            gmail_account_used=sender_email,
+            error_message=None,
+        )
+
+    except Exception as exc:
+        await log_email_attempt(
+            db=db,
+            submission_id=submission.id,
+            email_type=email_type,
+            recipient_email=student.email,
+            gmail_account_used=sender_email,
+            error_message=str(exc)[:1000],
+        )
+
+        raise
 
 
 async def run_evaluation(
     submission_id: int,
     db: AsyncSession,
 ) -> Evaluation:
-    """
-    Main dispatcher:
-    1. Fetch submission + student + project.
-    2. Fetch previous submissions as context.
-    3. Call Gemini evaluator.
-    4. Save Evaluation row.
-    5. Send feedback email to the student.
-
-    On Gemini failure:
-    - Save fallback Evaluation.
-    - Send fallback feedback email.
-    - Do not crash the request/background task.
-    """
     submission, enrollment, student, project = await _fetch_submission_graph(
         submission_id=submission_id,
         db=db,
     )
+
+    existing_evaluation = await _get_existing_evaluation(
+        submission_id=submission.id,
+        db=db,
+    )
+
+    if existing_evaluation is not None:
+        try:
+            await send_feedback_email(
+                student=student,
+                submission=submission,
+                evaluation=existing_evaluation,
+                project=project,
+                db=db,
+            )
+        except Exception:
+            print("[AI DISPATCHER] Existing evaluation email resend failed.")
+            print(traceback.format_exc())
+
+        return existing_evaluation
 
     try:
         previous_submissions = await _fetch_previous_submissions(
@@ -360,16 +353,18 @@ async def run_evaluation(
 
         evaluation = await _save_success_evaluation(
             submission=submission,
+            enrollment=enrollment,
             result=result,
             db=db,
         )
 
     except Exception as exc:
-        print("[AI DISPATCHER] Gemini evaluation failed.")
+        print("[AI DISPATCHER] Gemini evaluation failed. Creating fallback evaluation.")
         print(traceback.format_exc())
 
         evaluation = await _save_fallback_evaluation(
             submission=submission,
+            enrollment=enrollment,
             error=exc,
             db=db,
         )
@@ -382,13 +377,27 @@ async def run_evaluation(
             project=project,
             db=db,
         )
+
+        submission.email_sent = True
+        submission.email_error = None
+        await db.commit()
+
     except Exception as exc:
         print("[AI DISPATCHER] Feedback email failed.")
         print(traceback.format_exc())
 
-        _set_optional_field(submission, "email_sent", False)
-        _set_optional_field(submission, "email_error", f"Feedback email failed: {exc}")
-
+        submission.email_sent = False
+        submission.email_error = f"Feedback email failed: {str(exc)[:1000]}"
         await db.commit()
 
     return evaluation
+
+
+async def run_evaluation_in_new_session(submission_id: int) -> None:
+    from app.database import async_session_maker
+
+    async with async_session_maker() as db:
+        await run_evaluation(
+            submission_id=submission_id,
+            db=db,
+        )

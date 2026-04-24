@@ -55,6 +55,13 @@ class SubmissionStatus(str, PyEnum):
     OVERDUE = "overdue"
 
 
+class EmailType(str, PyEnum):
+    CONFIRMATION = "confirmation"
+    PROFESSOR_NOTIFICATION = "professor_notification"
+    FEEDBACK = "feedback"
+    OVERRIDE_FEEDBACK = "override_feedback"
+
+
 def enum_values(enum_cls: type[PyEnum]) -> list[str]:
     return [item.value for item in enum_cls]
 
@@ -328,6 +335,13 @@ class Submission(Base):
         cascade="all, delete-orphan",
     )
 
+    email_logs: Mapped[list["EmailLog"]] = relationship(
+        "EmailLog",
+        back_populates="submission",
+        cascade="all, delete-orphan",
+        order_by="EmailLog.sent_at.desc()",
+    )
+
 
 class Evaluation(Base):
     __tablename__ = "evaluations"
@@ -392,10 +406,6 @@ class Evaluation(Base):
 
     @property
     def score(self) -> int:
-        """
-        Compatibility alias used by dispatcher/services.
-        The real persisted column is ai_score.
-        """
         return self.ai_score
 
     @score.setter
@@ -404,10 +414,6 @@ class Evaluation(Base):
 
     @property
     def criteria(self) -> dict[str, Any]:
-        """
-        Compatibility alias used by dispatcher/services.
-        The real persisted column is criteria_breakdown.
-        """
         return self.criteria_breakdown
 
     @criteria.setter
@@ -472,4 +478,40 @@ class GmailAccount(Base):
         "Project",
         back_populates="gmail_account",
         foreign_keys="Project.gmail_account_id",
+    )
+
+
+class EmailLog(Base):
+    __tablename__ = "email_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    submission_id: Mapped[int] = mapped_column(
+        ForeignKey("submissions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    email_type: Mapped[EmailType] = mapped_column(
+        Enum(
+            EmailType,
+            name="email_type",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    recipient_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    gmail_account_used: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sent_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    submission: Mapped["Submission"] = relationship(
+        "Submission",
+        back_populates="email_logs",
     )

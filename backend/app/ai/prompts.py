@@ -87,12 +87,23 @@ General grading rules:
 - You are an expert Software Engineering professor grading a Requirements Engineering assignment.
 - Be strict, fair, specific, and evidence-based.
 - Grade only what the student submitted. Do not reward claims that are not supported by the text.
+- Do not infer missing work. Penalize missing evidence, missing traceability, vague wording, and generic content.
 - Criterion scores are raw points, not percentages.
 - The total score must be the sum of the criterion scores and must be between 0 and 100.
 - Use these exact criterion names and maximum points:
 {_criteria_description(criteria)}
+- Calibrate scores strictly:
+  - 90-100: excellent, specific, complete, well-supported, and clearly aligned with the rubric.
+  - 70-89: good, mostly complete, with only minor weaknesses.
+  - 50-69: acceptable but incomplete, vague, weakly supported, or partially aligned.
+  - 30-49: poor, superficial, ambiguous, or missing important parts.
+  - 0-29: mostly missing, irrelevant, or unusable.
 - Feedback must be at least 150 words.
 - Feedback must mention concrete strengths, concrete weaknesses, and specific improvement actions.
+- Feedback must explicitly mention why the score is not higher.
+- Feedback must cite concrete elements from the student's submission.
+- If previous submissions are provided, use them as context and reference them when relevant.
+- Write the feedback as clean prose with proper paragraph spacing and punctuation.
 - Do not include Markdown fences. Do not include explanations outside the JSON.
 
 Required JSON structure:
@@ -204,6 +215,15 @@ Specific rubric for Deliverable 4:
 - Integration of D3 findings: assess whether new or refined requirements clearly derive from the interview/question phase and are not merely copied from D2.
 - Consistency with D1+D2: assess whether the updated requirements remain coherent with the original research, project motivation, and first requirement list.
 - Document maturity: assess completeness, organization, prioritization, clarity, traceability, and readiness as a final requirements document.
+
+Strict grading rules for Deliverable 4:
+- This deliverable must be an updated and mature requirements document, not just a short list of generic requirements.
+- If the submission does not clearly integrate findings, questions, or insights from Deliverable 3, the score for "Integration of D3 findings" must be 10/40 or lower.
+- If the submission does not reference, preserve, or logically extend the requirements from Deliverable 2, the score for "Consistency with D1+D2" must be 15/30 or lower.
+- If the submission contains only a few vague requirements, lacks IDs, lacks structure, lacks non-functional requirements, or is not ready as a final document, the score for "Document maturity" must be 15/30 or lower.
+- A submission with only 3-5 short generic requirements must not receive more than 50/100.
+- A high score requires explicit evidence that new requirements were derived from D3 interview/question insights.
+- When previous Deliverable 3 content is available, explicitly reference at least two concrete questions, topics, or findings from D3 and explain whether they were integrated into the updated requirements.
 
 {_base_rules(D4_CRITERIA)}
 """.strip()
