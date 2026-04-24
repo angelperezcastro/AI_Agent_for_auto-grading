@@ -65,6 +65,7 @@ class User(TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+
     role: Mapped[UserRole] = mapped_column(
         Enum(
             UserRole,
@@ -73,6 +74,7 @@ class User(TimestampMixin, Base):
         ),
         nullable=False,
     )
+
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -86,18 +88,21 @@ class User(TimestampMixin, Base):
         cascade="all, delete-orphan",
         foreign_keys="Subject.professor_id",
     )
+
     enrollments: Mapped[list["Enrollment"]] = relationship(
         "Enrollment",
         back_populates="student",
         cascade="all, delete-orphan",
         foreign_keys="Enrollment.student_id",
     )
+
     gmail_accounts: Mapped[list["GmailAccount"]] = relationship(
         "GmailAccount",
         back_populates="professor",
         cascade="all, delete-orphan",
         foreign_keys="GmailAccount.professor_id",
     )
+
     evaluation_overrides: Mapped[list["Evaluation"]] = relationship(
         "Evaluation",
         back_populates="override_by_professor",
@@ -107,6 +112,7 @@ class User(TimestampMixin, Base):
 
 class Subject(TimestampMixin, Base):
     __tablename__ = "subjects"
+
     __table_args__ = (
         UniqueConstraint("professor_id", "name", name="uq_subjects_professor_name"),
     )
@@ -126,11 +132,13 @@ class Subject(TimestampMixin, Base):
         back_populates="subjects",
         foreign_keys=[professor_id],
     )
+
     projects: Mapped[list["Project"]] = relationship(
         "Project",
         back_populates="subject",
         cascade="all, delete-orphan",
     )
+
     gmail_accounts: Mapped[list["GmailAccount"]] = relationship(
         "GmailAccount",
         back_populates="subject",
@@ -139,6 +147,7 @@ class Subject(TimestampMixin, Base):
 
 class Project(TimestampMixin, Base):
     __tablename__ = "projects"
+
     __table_args__ = (
         UniqueConstraint("subject_id", "name", name="uq_projects_subject_name"),
     )
@@ -154,7 +163,23 @@ class Project(TimestampMixin, Base):
         index=True,
     )
 
-    subject: Mapped["Subject"] = relationship("Subject", back_populates="projects")
+    gmail_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("gmail_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    subject: Mapped["Subject"] = relationship(
+        "Subject",
+        back_populates="projects",
+    )
+
+    gmail_account: Mapped["GmailAccount | None"] = relationship(
+        "GmailAccount",
+        back_populates="projects",
+        foreign_keys=[gmail_account_id],
+    )
+
     enrollments: Mapped[list["Enrollment"]] = relationship(
         "Enrollment",
         back_populates="project",
@@ -164,6 +189,7 @@ class Project(TimestampMixin, Base):
 
 class Enrollment(TimestampMixin, Base):
     __tablename__ = "enrollments"
+
     __table_args__ = (
         UniqueConstraint("student_id", "project_id", name="uq_enrollments_student_project"),
         CheckConstraint(
@@ -179,6 +205,7 @@ class Enrollment(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
+
     project_id: Mapped[int] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
@@ -214,7 +241,12 @@ class Enrollment(TimestampMixin, Base):
         back_populates="enrollments",
         foreign_keys=[student_id],
     )
-    project: Mapped["Project"] = relationship("Project", back_populates="enrollments")
+
+    project: Mapped["Project"] = relationship(
+        "Project",
+        back_populates="enrollments",
+    )
+
     submissions: Mapped[list["Submission"]] = relationship(
         "Submission",
         back_populates="enrollment",
@@ -225,6 +257,7 @@ class Enrollment(TimestampMixin, Base):
 
 class Submission(Base):
     __tablename__ = "submissions"
+
     __table_args__ = (
         UniqueConstraint(
             "enrollment_id",
@@ -270,7 +303,23 @@ class Submission(Base):
         nullable=False,
     )
 
-    enrollment: Mapped["Enrollment"] = relationship("Enrollment", back_populates="submissions")
+    email_sent: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+
+    email_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    enrollment: Mapped["Enrollment"] = relationship(
+        "Enrollment",
+        back_populates="submissions",
+    )
+
     evaluation: Mapped["Evaluation | None"] = relationship(
         "Evaluation",
         back_populates="submission",
@@ -281,6 +330,7 @@ class Submission(Base):
 
 class Evaluation(Base):
     __tablename__ = "evaluations"
+
     __table_args__ = (
         UniqueConstraint("submission_id", name="uq_evaluations_submission"),
         CheckConstraint("ai_score >= 0 AND ai_score <= 100", name="ck_evaluations_ai_score_range"),
@@ -314,18 +364,25 @@ class Evaluation(Base):
         default=False,
         server_default=text("false"),
     )
+
     override_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     override_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     override_by_professor_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+
     override_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    submission: Mapped["Submission"] = relationship("Submission", back_populates="evaluation")
+    submission: Mapped["Submission"] = relationship(
+        "Submission",
+        back_populates="evaluation",
+    )
+
     override_by_professor: Mapped["User | None"] = relationship(
         "User",
         back_populates="evaluation_overrides",
@@ -335,6 +392,7 @@ class Evaluation(Base):
 
 class GmailAccount(Base):
     __tablename__ = "gmail_accounts"
+
     __table_args__ = (
         UniqueConstraint(
             "professor_id",
@@ -378,8 +436,15 @@ class GmailAccount(Base):
         back_populates="gmail_accounts",
         foreign_keys=[professor_id],
     )
+
     subject: Mapped["Subject | None"] = relationship(
         "Subject",
         back_populates="gmail_accounts",
         foreign_keys=[subject_id],
+    )
+
+    projects: Mapped[list["Project"]] = relationship(
+        "Project",
+        back_populates="gmail_account",
+        foreign_keys="Project.gmail_account_id",
     )
