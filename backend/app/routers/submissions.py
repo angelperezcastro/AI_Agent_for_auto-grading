@@ -5,10 +5,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ai.dispatcher import trigger_ai_evaluation
 from app.database import async_session_maker, get_db
 from app.deps import get_current_user
 from app.models import Enrollment, Project, Subject, Submission, User
 from app.schemas.core import SubmissionCreate, SubmissionRead
+from app.services.email_dispatch import (
+    send_professor_notification,
+    send_submission_confirmation,
+)
 from app.services.submission_rules import check_submission_allowed
 
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
@@ -16,27 +21,24 @@ router = APIRouter(prefix="/submissions", tags=["Submissions"])
 logger = logging.getLogger(__name__)
 
 
-async def send_submission_emails_background(submission_id: int) -> None:
-    """
-    Temporary Week 2 Day 1 hook.
-    Real Gmail resolver + templates will be wired in the next step.
-    """
+async def send_submission_confirmation_background(submission_id: int) -> None:
     async with async_session_maker() as db:
-        submission = await db.get(Submission, submission_id)
+        await send_submission_confirmation(
+            submission_id=submission_id,
+            db=db,
+        )
 
-        if not submission:
-            return
 
-        try:
-            submission.email_sent = False
-            submission.email_error = "Email resolver not wired yet. Submission saved correctly."
-            await db.commit()
+async def send_professor_notification_background(submission_id: int) -> None:
+    async with async_session_maker() as db:
+        await send_professor_notification(
+            submission_id=submission_id,
+            db=db,
+        )
 
-        except Exception as exc:
-            logger.exception("Submission email dispatch failed.")
-            submission.email_sent = False
-            submission.email_error = str(exc)
-            await db.commit()
+
+async def trigger_ai_evaluation_background(submission_id: int) -> None:
+    await trigger_ai_evaluation(submission_id=submission_id)
 
 
 @router.post("", response_model=SubmissionRead, status_code=status.HTTP_201_CREATED)
@@ -97,7 +99,18 @@ async def create_submission(
     await db.commit()
     await db.refresh(submission)
 
-    background_tasks.add_task(send_submission_emails_background, submission.id)
+    background_tasks.add_task(
+        send_submission_confirmation_background,
+        submission.id,
+    )
+    background_tasks.add_task(
+        send_professor_notification_background,
+        submission.id,
+    )
+    background_tasks.add_task(
+        trigger_ai_evaluation_background,
+        submission.id,
+    )
 
     return submission
 

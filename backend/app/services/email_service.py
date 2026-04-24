@@ -20,8 +20,6 @@ def parse_expiry(expiry_str: str | None):
 
     parsed = datetime.fromisoformat(expiry_str)
 
-    # google-auth compara contra datetimes naive en UTC.
-    # Si viene aware, lo convertimos a UTC y le quitamos tzinfo.
     if parsed.tzinfo is not None:
         return parsed.astimezone(timezone.utc).replace(tzinfo=None)
 
@@ -41,7 +39,10 @@ def serialize_credentials(credentials: Credentials) -> dict:
     }
 
 
-async def get_gmail_service(account_email: str, db: AsyncSession):
+async def get_gmail_service(
+    account_email: str,
+    db: AsyncSession,
+):
     result = await db.execute(
         select(GmailAccount).where(
             GmailAccount.account_email == account_email,
@@ -75,6 +76,7 @@ async def get_gmail_service(account_email: str, db: AsyncSession):
 
         refreshed_payload = serialize_credentials(credentials)
         gmail_account.credentials_json = encrypt_text(json.dumps(refreshed_payload))
+
         await db.commit()
         await db.refresh(gmail_account)
 
@@ -95,19 +97,39 @@ async def send_email(
     gmail_account_email: str,
     db: AsyncSession,
 ):
-    service = await get_gmail_service(gmail_account_email, db)
+    if not to:
+        raise ValueError("Recipient email is required.")
+
+    if not subject:
+        raise ValueError("Email subject is required.")
+
+    if not body_html:
+        raise ValueError("Email body_html is required.")
+
+    if not gmail_account_email:
+        raise ValueError("Gmail account email is required.")
+
+    service = await get_gmail_service(
+        account_email=gmail_account_email,
+        db=db,
+    )
 
     message = MIMEText(body_html, "html", "utf-8")
     message["to"] = to
     message["from"] = gmail_account_email
     message["subject"] = subject
 
-    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+    raw_message = base64.urlsafe_b64encode(
+        message.as_bytes()
+    ).decode("utf-8")
 
     sent_message = (
         service.users()
         .messages()
-        .send(userId="me", body={"raw": raw_message})
+        .send(
+            userId="me",
+            body={"raw": raw_message},
+        )
         .execute()
     )
 
