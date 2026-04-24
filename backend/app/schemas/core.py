@@ -62,9 +62,42 @@ class EnrollmentRead(BaseModel):
     project_id: int
     current_deliverable: int
     status: str
-    created_at: datetime
+    enrolled_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class EnrollmentProgressRead(BaseModel):
+    id: int
+    student_id: int
+    project_id: int
+    project_name: str
+    subject_id: int
+    subject_name: str
+    current_deliverable: int
+    status: str
+    submitted_count: int
+    evaluated_count: int
+    latest_score: int | None
+    latest_submission_at: datetime | None
+    next_deliverable: int | None
+    enrolled_at: datetime
+
+
+class ProjectEnrollmentRead(BaseModel):
+    enrollment_id: int
+    student_id: int
+    student_name: str
+    student_email: str
+    project_id: int
+    project_name: str
+    current_deliverable: int
+    status: str
+    submitted_count: int
+    evaluated_count: int
+    latest_score: int | None
+    latest_submission_at: datetime | None
+    enrolled_at: datetime
 
 
 class SubmissionCreate(BaseModel):
@@ -79,7 +112,47 @@ class SubmissionRead(BaseModel):
     deliverable_number: int
     content: str
     submitted_at: datetime
+    deadline_at: datetime
     email_sent: bool
     email_error: str | None
 
     model_config = {"from_attributes": True}
+
+
+class EvaluationRead(BaseModel):
+    id: int
+    submission_id: int
+    ai_score: int
+    criteria_breakdown: dict
+    feedback: str
+    evaluated_at: datetime
+    is_overridden: bool
+    override_score: int | None
+    override_comment: str | None
+    override_by_professor_id: int | None
+    override_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class SubmissionWithEvaluationRead(BaseModel):
+    id: int
+    enrollment_id: int
+    deliverable_number: int
+    content: str
+    submitted_at: datetime
+    deadline_at: datetime
+    email_sent: bool
+    email_error: str | None
+    evaluation: EvaluationRead | None
+
+    model_config = {"from_attributes": True}
+
+
+class PendingEvaluationRead(BaseModel):
+    status: str = "pending"
+
+
+class EvaluationOverrideRequest(BaseModel):
+    override_score: int = Field(ge=0, le=100)
+    override_comment: str = Field(min_length=5)
