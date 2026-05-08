@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../services/api";
-
-const AuthContext = createContext(null);
+import { AuthContext } from "./AuthContextBase";
 
 function decodeJwt(token) {
   try {
@@ -103,33 +102,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(email, password) {
-    let response;
-
-    try {
-      response = await api.post("/auth/login", {
-        email,
-        password,
-      });
-    } catch (error) {
-      const shouldTryFormLogin =
-        error.response?.status === 400 ||
-        error.response?.status === 415 ||
-        error.response?.status === 422;
-
-      if (!shouldTryFormLogin) {
-        throw error;
-      }
-
-      const formData = new URLSearchParams();
-      formData.append("username", email);
-      formData.append("password", password);
-
-      response = await api.post("/auth/login", formData, {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      });
-    }
+    const response = await api.post("/auth/login", {
+      email,
+      password,
+    });
 
     const token = extractToken(response.data);
 
@@ -163,45 +139,14 @@ export function AuthProvider({ children }) {
   }
 
   async function register({ fullName, email, password, role }) {
-    const attempts = [
-      {
-        full_name: fullName,
-        email,
-        password,
-        role,
-      },
-      {
-        name: fullName,
-        email,
-        password,
-        role,
-      },
-      {
-        email,
-        password,
-        role,
-      },
-    ];
+    const response = await api.post("/auth/register", {
+      name: fullName,
+      email,
+      password,
+      role,
+    });
 
-    let lastError = null;
-
-    for (const payload of attempts) {
-      try {
-        const response = await api.post("/auth/register", payload);
-        return response.data;
-      } catch (error) {
-        lastError = error;
-
-        const status = error.response?.status;
-        const canRetry = status === 400 || status === 415 || status === 422;
-
-        if (!canRetry) {
-          throw error;
-        }
-      }
-    }
-
-    throw lastError;
+    return response.data;
   }
 
   function logout() {
@@ -210,29 +155,16 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
-  const value = useMemo(
-    () => ({
-      user,
-      loading,
-      isAuthenticated: Boolean(localStorage.getItem("access_token")),
-      isProfessor: user?.role === "professor",
-      isStudent: user?.role === "student",
-      login,
-      register,
-      logout,
-    }),
-    [user, loading]
-  );
+  const value = {
+    user,
+    loading,
+    isAuthenticated: Boolean(localStorage.getItem("access_token")),
+    isProfessor: user?.role === "professor",
+    isStudent: user?.role === "student",
+    login,
+    register,
+    logout,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider.");
-  }
-
-  return context;
 }
