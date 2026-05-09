@@ -1,3 +1,12 @@
+import {
+  getCriterionMaxPoints,
+  inferDeliverableNumberFromCriteria,
+} from "../data/deliverables";
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function getCriteriaEntries(evaluation) {
   const criteria =
     evaluation?.criteria_breakdown ||
@@ -13,6 +22,25 @@ function getCriteriaEntries(evaluation) {
     name,
     value: Number(value),
   }));
+}
+
+function getExplicitDeliverableNumber(evaluation) {
+  const possibleValues = [
+    evaluation?.deliverable_number,
+    evaluation?.submission_deliverable_number,
+    evaluation?.submission?.deliverable_number,
+    evaluation?.submission?.deliverableNumber,
+  ];
+
+  for (const value of possibleValues) {
+    const numericValue = Number(value);
+
+    if (Number.isInteger(numericValue) && numericValue >= 1 && numericValue <= 4) {
+      return numericValue;
+    }
+  }
+
+  return null;
 }
 
 function getScoreColor(score) {
@@ -67,6 +95,31 @@ function getFinalScore(evaluation) {
   return getAiScore(evaluation);
 }
 
+function buildCriteriaRows(criteriaEntries, deliverableNumber) {
+  const fallbackMaxPoints =
+    criteriaEntries.length > 0 ? Math.round(100 / criteriaEntries.length) : 100;
+
+  return criteriaEntries.map((criterion) => {
+    const rawValue = Number.isFinite(criterion.value) ? criterion.value : 0;
+    const rubricMaxPoints = getCriterionMaxPoints(
+      criterion.name,
+      deliverableNumber
+    );
+    const maxPoints = rubricMaxPoints || Math.max(fallbackMaxPoints, rawValue, 1);
+    const safeScore = clampNumber(rawValue, 0, maxPoints);
+    const progressPercentage = clampNumber((safeScore / maxPoints) * 100, 0, 100);
+
+    return {
+      ...criterion,
+      value: rawValue,
+      safeScore,
+      maxPoints,
+      progressPercentage,
+      hasKnownMaxPoints: Boolean(rubricMaxPoints),
+    };
+  });
+}
+
 export default function FeedbackCard({ evaluation }) {
   if (!evaluation) {
     return null;
@@ -81,6 +134,10 @@ export default function FeedbackCard({ evaluation }) {
 
   const scoreColors = getScoreColor(finalScore ?? aiScore ?? 0);
   const criteriaEntries = getCriteriaEntries(evaluation);
+  const deliverableNumber =
+    getExplicitDeliverableNumber(evaluation) ||
+    inferDeliverableNumberFromCriteria(criteriaEntries);
+  const criteriaRows = buildCriteriaRows(criteriaEntries, deliverableNumber);
 
   return (
     <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -114,11 +171,9 @@ export default function FeedbackCard({ evaluation }) {
           </p>
 
           <p className="mt-1 text-sm text-indigo-800">
-            AI Score:{" "}
-            <span className="font-black">{aiScore ?? "—"}</span>
+            AI Score: <span className="font-black">{aiScore ?? "—"}</span>
             {" → "}
-            Professor Score:{" "}
-            <span className="font-black">{finalScore ?? "—"}</span>
+            Professor Score: <span className="font-black">{finalScore ?? "—"}</span>
           </p>
 
           {evaluation.override_comment && (
@@ -129,7 +184,7 @@ export default function FeedbackCard({ evaluation }) {
         </div>
       )}
 
-      {criteriaEntries.length > 0 && (
+      {criteriaRows.length > 0 && (
         <div className="mt-6">
           <h4 className="text-sm font-bold uppercase tracking-wide text-slate-500">
             Criteria breakdown
@@ -140,38 +195,39 @@ export default function FeedbackCard({ evaluation }) {
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3 font-bold">Criterion</th>
-                  <th className="w-32 px-4 py-3 font-bold">Score</th>
-                  <th className="w-48 px-4 py-3 font-bold">Progress</th>
+                  <th className="w-36 px-4 py-3 font-bold">Score</th>
+                  <th className="w-56 px-4 py-3 font-bold">Progress</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {criteriaEntries.map((criterion) => {
-                  const safeValue = Number.isFinite(criterion.value)
-                    ? Math.max(0, Math.min(100, criterion.value))
-                    : 0;
+                {criteriaRows.map((criterion) => (
+                  <tr key={criterion.name}>
+                    <td className="px-4 py-4 font-medium text-slate-800">
+                      {criterion.name}
+                    </td>
 
-                  return (
-                    <tr key={criterion.name}>
-                      <td className="px-4 py-4 font-medium text-slate-800">
-                        {criterion.name}
-                      </td>
+                    <td className="px-4 py-4 font-bold text-slate-700">
+                      {criterion.hasKnownMaxPoints
+                        ? `${criterion.safeScore}/${criterion.maxPoints}`
+                        : criterion.safeScore}
+                    </td>
 
-                      <td className="px-4 py-4 font-bold text-slate-700">
-                        {criterion.value}
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
                           <div
                             className={`h-full rounded-full ${scoreColors.bar}`}
-                            style={{ width: `${safeValue}%` }}
+                            style={{ width: `${criterion.progressPercentage}%` }}
                           />
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        <span className="w-10 text-right text-xs font-bold text-slate-500">
+                          {Math.round(criterion.progressPercentage)}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
