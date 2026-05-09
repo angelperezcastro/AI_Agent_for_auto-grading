@@ -1,3 +1,4 @@
+from app.routers.professor import router as professor_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -38,7 +39,7 @@ app.include_router(projects_router)
 app.include_router(enrollments_router)
 app.include_router(submissions_router)
 app.include_router(evaluations_router)
-
+app.include_router(professor_router)
 
 @app.get("/")
 async def root():

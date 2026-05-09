@@ -3,6 +3,26 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
 import { getApiErrorMessage } from "../services/api";
 
+function normalizeRole(role) {
+  return String(role || "").toLowerCase();
+}
+
+function getSafeRedirectPath(pathname, role) {
+  if (!pathname || pathname === "/login" || pathname === "/register") {
+    return role === "professor" ? "/professor/dashboard" : "/dashboard";
+  }
+
+  if (role === "professor") {
+    return pathname.startsWith("/professor") ? pathname : "/professor/dashboard";
+  }
+
+  if (pathname.startsWith("/professor")) {
+    return "/dashboard";
+  }
+
+  return pathname;
+}
+
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -16,30 +36,34 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const registered = location.state?.registered;
+  const registered = Boolean(location.state?.registered);
   const redirectFrom = location.state?.from?.pathname;
 
   function updateField(event) {
+    const { name, value } = event.target;
+
     setForm((current) => ({
       ...current,
-      [event.target.name]: event.target.value,
+      [name]: value,
     }));
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (loading) {
+      return;
+    }
+
     setError("");
     setLoading(true);
 
     try {
-      const user = await login(form.email, form.password);
+      const loggedUser = await login(form.email.trim(), form.password);
+      const role = normalizeRole(loggedUser?.role || loggedUser?.user?.role);
+      const destination = getSafeRedirectPath(redirectFrom, role);
 
-      if (user?.role === "professor") {
-        navigate("/professor/dashboard", { replace: true });
-        return;
-      }
-
-      navigate(redirectFrom || "/dashboard", { replace: true });
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -90,33 +114,43 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+              <label
+                htmlFor="email"
+                className="mb-2 block text-sm font-medium text-slate-700"
+              >
                 Email
               </label>
               <input
+                id="email"
                 name="email"
                 type="email"
                 value={form.email}
                 onChange={updateField}
                 required
                 autoComplete="email"
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
+                disabled={loading}
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
                 placeholder="student@example.com"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+              <label
+                htmlFor="password"
+                className="mb-2 block text-sm font-medium text-slate-700"
+              >
                 Password
               </label>
               <input
+                id="password"
                 name="password"
                 type="password"
                 value={form.password}
                 onChange={updateField}
                 required
                 autoComplete="current-password"
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100"
+                disabled={loading}
+                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-cyan-500 focus:ring-4 focus:ring-cyan-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
                 placeholder="••••••••"
               />
             </div>
@@ -132,7 +166,10 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-sm text-slate-500">
             No account yet?{" "}
-            <Link to="/register" className="font-semibold text-cyan-700">
+            <Link
+              to="/register"
+              className="font-semibold text-cyan-700 hover:text-cyan-800"
+            >
               Create one
             </Link>
           </p>
