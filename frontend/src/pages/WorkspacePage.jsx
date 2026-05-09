@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import FeedbackCard from "../components/FeedbackCard";
 import Navbar from "../components/Navbar";
+import SubmissionForm from "../components/SubmissionForm";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
 import { formatDateTime, getDeadlineCountdown } from "../utils/dates";
@@ -274,7 +276,7 @@ function DeliverableStep({
 
             <button
               type="button"
-              onClick={() => onWrite(deliverable.number)}
+              onClick={() => onWrite(deliverable)}
               className="rounded-2xl bg-cyan-700 px-5 py-3 text-sm font-bold text-white transition hover:bg-cyan-800"
             >
               Write & Submit
@@ -288,22 +290,13 @@ function DeliverableStep({
           </div>
         )}
 
-        {isGraded && evaluation?.feedback && (
-          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-            <p className="text-sm font-bold text-emerald-900">
-              AI feedback available
-            </p>
-            <p className="mt-2 line-clamp-3 text-sm leading-6 text-emerald-800">
-              {evaluation.feedback}
-            </p>
-          </div>
-        )}
-
         {isOverdue && (
           <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             ⚠️ This deliverable is marked as overdue.
           </div>
         )}
+
+        {isGraded && <FeedbackCard evaluation={evaluation} />}
       </article>
     </div>
   );
@@ -313,6 +306,7 @@ export default function WorkspacePage() {
   const { enrollmentId } = useParams();
 
   const [submissions, setSubmissions] = useState([]);
+  const [activeDeliverable, setActiveDeliverable] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -399,10 +393,9 @@ export default function WorkspacePage() {
     };
   }, [enrollmentId]);
 
-  function handleWrite(deliverableNumber) {
-    setNotice(
-      `Deliverable ${deliverableNumber} is ready. The full submission form will be implemented in the next Week 4 block.`
-    );
+  function handleWrite(deliverable) {
+    setNotice("");
+    setActiveDeliverable(deliverable);
 
     window.scrollTo({
       top: 0,
@@ -410,9 +403,30 @@ export default function WorkspacePage() {
     });
   }
 
+  async function handleSubmitted() {
+    setNotice(
+      "Submitted! The AI is now evaluating your work. You will receive your score and feedback by email within 1–2 minutes."
+    );
+
+    await refreshWorkspace();
+
+    setTimeout(async () => {
+      await refreshWorkspace();
+    }, 2500);
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar />
+
+      {activeDeliverable && (
+        <SubmissionForm
+          enrollmentId={enrollmentId}
+          deliverable={activeDeliverable}
+          onCancel={() => setActiveDeliverable(null)}
+          onSubmitted={handleSubmitted}
+        />
+      )}
 
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -462,7 +476,7 @@ export default function WorkspacePage() {
         </section>
 
         {notice && (
-          <div className="mb-6 rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 text-sm font-medium text-cyan-800">
+          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-800">
             {notice}
           </div>
         )}
@@ -487,7 +501,7 @@ export default function WorkspacePage() {
                   Deliverable timeline
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Current open deliverable:{" "}
+                  Current open deliverable: {" "}
                   <span className="font-semibold text-slate-800">
                     {currentOpenDeliverable
                       ? `Deliverable ${currentOpenDeliverable}`

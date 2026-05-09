@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.deps import get_current_user
@@ -20,7 +21,14 @@ async def build_enrollment_progress(
     db: AsyncSession,
 ) -> EnrollmentProgressRead:
     project = await db.get(Project, enrollment.project_id)
+
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+
     subject = await db.get(Subject, project.subject_id)
+
+    if subject is None:
+        raise HTTPException(status_code=404, detail="Subject not found.")
 
     submissions_result = await db.execute(
         select(Submission)
@@ -168,6 +176,10 @@ async def list_enrollment_submissions(
 
     elif current_user.role == "professor":
         project = await db.get(Project, enrollment.project_id)
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found.")
+
         subject = await db.get(Subject, project.subject_id)
 
         if not subject or subject.professor_id != current_user.id:
@@ -178,9 +190,10 @@ async def list_enrollment_submissions(
 
     result = await db.execute(
         select(Submission)
+        .options(selectinload(Submission.evaluation))
         .where(Submission.enrollment_id == enrollment_id)
         .order_by(Submission.deliverable_number.asc())
     )
     submissions = result.scalars().all()
 
-    return submissions
+    return list(submissions)
