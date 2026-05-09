@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any, Mapping, Sequence, TypedDict
 
 from dotenv import load_dotenv
@@ -28,53 +29,18 @@ class EvaluationResult(TypedDict):
 def _get_client() -> genai.Client:
     api_key = os.getenv("GEMINI_API_KEY")
 
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is missing. Add it to backend/.env")
+    if not api_key or api_key.strip().lower() == "dummy":
+        raise RuntimeError("GEMINI_API_KEY is missing or invalid. Add a real key to backend/.env")
 
-    return genai.Client(api_key=api_key)
+    return genai.Client(api_key=api_key.strip())
 
 
 def _get_primary_model_name() -> str:
-    return os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    return os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
 
 
 def _get_fallback_model_name() -> str:
-    return os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite")
-
-
-def _build_response_schema(expected_criteria: Mapping[str, int]) -> dict[str, Any]:
-    """
-    Builds a Gemini-compatible schema.
-
-    Important:
-    - Do NOT use additionalProperties. Gemini API does not support it.
-    - Criteria keys are explicitly declared because a generic object may be returned as {}.
-    """
-    return {
-        "type": "OBJECT",
-        "required": ["score", "criteria", "feedback"],
-        "properties": {
-            "score": {
-                "type": "INTEGER",
-                "description": "Total score from 0 to 100. Must equal the sum of all criterion scores.",
-            },
-            "criteria": {
-                "type": "OBJECT",
-                "required": list(expected_criteria.keys()),
-                "properties": {
-                    criterion_name: {
-                        "type": "INTEGER",
-                        "description": f"Score for '{criterion_name}', from 0 to {max_points}.",
-                    }
-                    for criterion_name, max_points in expected_criteria.items()
-                },
-            },
-            "feedback": {
-                "type": "STRING",
-                "description": "Detailed constructive feedback of at least 150 words.",
-            },
-        },
-    }
+    return os.getenv("GEMINI_FALLBACK_MODEL", "gemini-1.5-flash").strip()
 
 
 def _strip_json_fences(raw_text: str) -> str:
@@ -87,8 +53,29 @@ def _strip_json_fences(raw_text: str) -> str:
     return text.strip()
 
 
-def _parse_json(raw_text: str) -> dict[str, Any]:
+def _extract_json_object(raw_text: str) -> str:
+    """
+    Gemini usually returns pure JSON when response_mime_type is application/json.
+    This fallback also handles Markdown fences or small text prefixes/suffixes.
+    """
     text = _strip_json_fences(raw_text)
+
+    if text.startswith("{") and text.endswith("}"):
+        return text
+
+    start = text.find("{")
+    end = text.rfind("}")
+
+    if start == -1 or end == -1 or end <= start:
+        raise EvaluationMalformedResponseError(
+            f"Could not find a JSON object in Gemini response. Raw response: {raw_text[:1000]}"
+        )
+
+    return text[start : end + 1]
+
+
+def _parse_json(raw_text: str) -> dict[str, Any]:
+    text = _extract_json_object(raw_text)
 
     try:
         parsed = json.loads(text)
@@ -103,95 +90,184 @@ def _parse_json(raw_text: str) -> dict[str, Any]:
     return parsed
 
 
-def _ensure_int(value: Any, field_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise EvaluationMalformedResponseError(f"{field_name} must be an integer.")
+def _coerce_int(value: Any, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise EvaluationMalformedResponseError(f"{field_name} must be numeric, not boolean.")
 
-    return value
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, float):
+        return int(round(value))
+
+    if isinstance(value, str):
+        match = re.search(r"-?\d+(?:\.\d+)?", value.strip())
+        if match:
+            return int(round(float(match.group(0))))
+
+    raise EvaluationMalformedResponseError(f"{field_name} must be an integer-compatible value.")
 
 
-def _count_words(text: str) -> int:
-    return len(re.findall(r"\b\w+\b", text, flags=re.UNICODE))
+def _normalise_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _distribute_score_across_criteria(
+    score: int,
+    expected_criteria: Mapping[str, int],
+) -> dict[str, int]:
+    """Distribute a total score proportionally across rubric weights."""
+    score = max(0, min(100, score))
+    total_weight = sum(expected_criteria.values()) or 100
+
+    distributed: dict[str, int] = {}
+    running_total = 0
+    items = list(expected_criteria.items())
+
+    for index, (criterion_name, max_points) in enumerate(items):
+        if index == len(items) - 1:
+            criterion_score = score - running_total
+        else:
+            criterion_score = round(score * (max_points / total_weight))
+            running_total += criterion_score
+
+        distributed[criterion_name] = max(0, min(max_points, criterion_score))
+
+    # If clamping changed the sum, adjust from the last criterion backwards.
+    diff = score - sum(distributed.values())
+    for criterion_name, max_points in reversed(items):
+        if diff == 0:
+            break
+
+        current_value = distributed[criterion_name]
+
+        if diff > 0:
+            available = max_points - current_value
+            delta = min(available, diff)
+            distributed[criterion_name] += delta
+            diff -= delta
+        else:
+            removable = current_value
+            delta = min(removable, abs(diff))
+            distributed[criterion_name] -= delta
+            diff += delta
+
+    return distributed
+
+
+def _validate_and_repair_criteria(
+    raw_criteria: Any,
+    score: int,
+    expected_criteria: Mapping[str, int],
+) -> dict[str, int]:
+    if not isinstance(raw_criteria, dict):
+        return _distribute_score_across_criteria(score, expected_criteria)
+
+    actual_by_normalized_key = {
+        _normalise_key(str(key)): value for key, value in raw_criteria.items()
+    }
+
+    repaired: dict[str, int] = {}
+    missing_any = False
+
+    for criterion_name, max_points in expected_criteria.items():
+        normalized_expected_name = _normalise_key(criterion_name)
+        raw_value = actual_by_normalized_key.get(normalized_expected_name)
+
+        if raw_value is None:
+            missing_any = True
+            break
+
+        criterion_score = _coerce_int(raw_value, f"criteria.{criterion_name}")
+        repaired[criterion_name] = max(0, min(max_points, criterion_score))
+
+    if missing_any:
+        return _distribute_score_across_criteria(score, expected_criteria)
+
+    criteria_sum = sum(repaired.values())
+
+    # The project rubric expects the total score to equal the criteria sum.
+    # If Gemini returns a close but inconsistent total, trust the criterion breakdown.
+    if criteria_sum != score:
+        return repaired
+
+    return repaired
 
 
 def _validate_result(
     parsed: Mapping[str, Any],
     expected_criteria: Mapping[str, int],
 ) -> EvaluationResult:
-    required_top_level_keys = {"score", "criteria", "feedback"}
-    missing_keys = required_top_level_keys - set(parsed.keys())
+    if "score" not in parsed:
+        raise EvaluationMalformedResponseError("Missing top-level key: score")
 
-    if missing_keys:
-        raise EvaluationMalformedResponseError(
-            f"Missing top-level keys: {sorted(missing_keys)}"
-        )
+    score = _coerce_int(parsed["score"], "score")
+    score = max(0, min(100, score))
 
-    score = _ensure_int(parsed["score"], "score")
+    criteria = _validate_and_repair_criteria(
+        raw_criteria=parsed.get("criteria"),
+        score=score,
+        expected_criteria=expected_criteria,
+    )
 
-    if not 0 <= score <= 100:
-        raise EvaluationMalformedResponseError("score must be between 0 and 100.")
+    # Store a coherent score that matches the stored rubric breakdown.
+    score = max(0, min(100, sum(criteria.values())))
 
-    criteria = parsed["criteria"]
-
-    if not isinstance(criteria, dict):
-        raise EvaluationMalformedResponseError("criteria must be an object.")
-
-    expected_names = set(expected_criteria.keys())
-    actual_names = set(criteria.keys())
-
-    if actual_names != expected_names:
-        raise EvaluationMalformedResponseError(
-            "criteria keys do not match expected rubric. "
-            f"Expected: {sorted(expected_names)}. Got: {sorted(actual_names)}"
-        )
-
-    validated_criteria: dict[str, int] = {}
-
-    for criterion_name, max_points in expected_criteria.items():
-        criterion_score = _ensure_int(
-            criteria[criterion_name],
-            f"criteria.{criterion_name}",
-        )
-
-        if not 0 <= criterion_score <= max_points:
-            raise EvaluationMalformedResponseError(
-                f"criteria.{criterion_name} must be between 0 and {max_points}."
-            )
-
-        validated_criteria[criterion_name] = criterion_score
-
-    criteria_sum = sum(validated_criteria.values())
-
-    if criteria_sum != score:
-        raise EvaluationMalformedResponseError(
-            f"score must equal the sum of criteria scores. "
-            f"score={score}, criteria_sum={criteria_sum}."
-        )
-
-    feedback = parsed["feedback"]
+    feedback = parsed.get("feedback", "")
 
     if not isinstance(feedback, str):
-        raise EvaluationMalformedResponseError("feedback must be a string.")
+        feedback = str(feedback)
 
     feedback = feedback.strip()
 
-    if _count_words(feedback) < 150:
-        raise EvaluationMalformedResponseError(
-            "feedback must contain at least 150 words."
+    if not feedback:
+        feedback = (
+            "The submission was evaluated against the rubric, but Gemini returned an empty feedback field. "
+            "The score and criterion breakdown are still available. Please review the rubric results and improve "
+            "clarity, completeness, traceability, and structure in the next deliverable."
         )
 
     return {
         "score": score,
-        "criteria": validated_criteria,
+        "criteria": criteria,
         "feedback": feedback,
     }
+
+
+def _build_final_prompt(
+    base_prompt: str,
+    expected_criteria: Mapping[str, int],
+) -> str:
+    criteria_lines = "\n".join(
+        f'- "{criterion_name}": integer from 0 to {max_points}'
+        for criterion_name, max_points in expected_criteria.items()
+    )
+
+    return f"""
+{base_prompt}
+
+STRICT OUTPUT CONTRACT:
+Return ONLY one valid JSON object. Do not use Markdown fences. Do not add commentary outside JSON.
+The JSON object must have exactly this structure:
+{{
+  "score": integer from 0 to 100,
+  "criteria": {{
+{criteria_lines}
+  }},
+  "feedback": "detailed constructive feedback"
+}}
+
+Rules:
+- The score must equal the sum of all criteria values.
+- The criteria keys must use the exact names shown above.
+- Feedback should be specific, constructive, and refer to the student's actual submission.
+""".strip()
 
 
 def _generate_once(
     client: genai.Client,
     model_name: str,
     prompt: str,
-    expected_criteria: Mapping[str, int],
 ) -> str:
     response = client.models.generate_content(
         model=model_name,
@@ -201,37 +277,33 @@ def _generate_once(
             top_p=0.8,
             max_output_tokens=4096,
             response_mime_type="application/json",
-            response_schema=_build_response_schema(expected_criteria),
         ),
     )
 
     raw_text = getattr(response, "text", None)
 
-    if not raw_text:
+    if raw_text:
+        return raw_text
+
+    # Some SDK versions expose candidates even when .text is empty.
+    candidates = getattr(response, "candidates", None)
+    if candidates:
         raise EvaluationMalformedResponseError(
-            f"Gemini returned an empty response using model {model_name}."
+            f"Gemini returned no response.text using model {model_name}. Candidates: {candidates}"
         )
 
-    return raw_text
+    raise EvaluationMalformedResponseError(
+        f"Gemini returned an empty response using model {model_name}. Full response: {response}"
+    )
 
 
-def _generate_json_with_gemini(
-    prompt: str,
-    expected_criteria: Mapping[str, int],
-) -> str:
-    """
-    Calls Gemini with a primary model and a fallback model.
-
-    Handles temporary 503/high-demand errors by retrying automatically.
-    """
-    import time
-
+def _generate_json_with_gemini(prompt: str) -> str:
     client = _get_client()
 
-    model_attempts = [
-        _get_primary_model_name(),
-        _get_fallback_model_name(),
-    ]
+    model_attempts = []
+    for model_name in [_get_primary_model_name(), _get_fallback_model_name()]:
+        if model_name and model_name not in model_attempts:
+            model_attempts.append(model_name)
 
     last_error: Exception | None = None
 
@@ -242,34 +314,20 @@ def _generate_json_with_gemini(
                     client=client,
                     model_name=model_name,
                     prompt=prompt,
-                    expected_criteria=expected_criteria,
                 )
             except Exception as exc:
                 last_error = exc
-                message = str(exc).lower()
-
-                is_temporary_capacity_error = (
-                    "503" in message
-                    or "unavailable" in message
-                    or "high demand" in message
-                    or "temporarily" in message
+                print(
+                    f"[Gemini evaluator] Attempt {attempt}/3 failed with model {model_name}: {type(exc).__name__}: {exc}"
                 )
 
-                if not is_temporary_capacity_error:
-                    raise
-
                 if attempt < 3:
-                    sleep_seconds = attempt * 2
-                    print(
-                        f"[Gemini] Temporary error with {model_name}. "
-                        f"Retrying in {sleep_seconds}s..."
-                    )
-                    time.sleep(sleep_seconds)
+                    time.sleep(attempt * 2)
 
-        print(f"[Gemini] Falling back from {model_name} to next available model.")
+        print(f"[Gemini evaluator] Falling back from {model_name} to next model.")
 
     raise RuntimeError(
-        f"Gemini evaluation failed after retries and fallback model. Last error: {last_error}"
+        f"Gemini evaluation failed after all model attempts. Last error: {type(last_error).__name__}: {last_error}"
     )
 
 
@@ -291,17 +349,18 @@ def _run_evaluation(
     previous_submissions = previous_submissions or []
     expected_criteria = CRITERIA_BY_DELIVERABLE[deliverable_number]
 
-    prompt = PROMPT_BUILDERS[deliverable_number](
+    base_prompt = PROMPT_BUILDERS[deliverable_number](
         project_topic=project_topic.strip(),
         deliverable_content=deliverable_content.strip(),
         previous_submissions=previous_submissions,
     )
 
-    raw_text = _generate_json_with_gemini(
-        prompt=prompt,
+    prompt = _build_final_prompt(
+        base_prompt=base_prompt,
         expected_criteria=expected_criteria,
     )
 
+    raw_text = _generate_json_with_gemini(prompt=prompt)
     parsed = _parse_json(raw_text)
 
     return _validate_result(

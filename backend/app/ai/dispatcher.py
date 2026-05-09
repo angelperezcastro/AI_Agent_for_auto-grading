@@ -172,52 +172,23 @@ async def _save_success_evaluation(
     return evaluation
 
 
-async def _save_fallback_evaluation(
+async def _mark_evaluation_failed(
     submission: Submission,
-    enrollment: Enrollment,
     error: Exception,
     db: AsyncSession,
-) -> Evaluation:
-    expected_criteria = CRITERIA_BY_DELIVERABLE.get(
-        submission.deliverable_number,
-        {},
-    )
+) -> None:
+    """
+    Do not create a fake 0/100 Evaluation when Gemini fails.
 
-    fallback_criteria = {
-        criterion_name: 0
-        for criterion_name in expected_criteria.keys()
-    }
+    Creating an Evaluation row makes the frontend mark the deliverable as graded.
+    Instead, keep the submission as submitted and store the real backend error
+    in email_error so it is visible during debugging.
+    """
+    submission.status = SubmissionStatus.SUBMITTED
+    submission.email_sent = False
+    submission.email_error = f"AI evaluation failed: {type(error).__name__}: {str(error)[:900]}"
 
-    fallback_feedback = (
-        "Evaluation failed — your professor will review this submission manually. "
-        "Your work has been received correctly, but the AI evaluation service could not complete the grading process. "
-        "This may be caused by temporary model capacity, quota limits, connectivity issues, or malformed AI output. "
-        "No action is required from you right now. Your professor has access to your submission and can review it manually."
-    )
-
-    evaluation = Evaluation(
-        submission_id=submission.id,
-        ai_score=0,
-        criteria_breakdown=fallback_criteria,
-        feedback=fallback_feedback,
-    )
-
-    submission.status = SubmissionStatus.EVALUATED
-    submission.email_error = f"AI evaluation fallback used: {str(error)[:500]}"
-
-    if submission.deliverable_number < 4:
-        enrollment.current_deliverable = max(
-            enrollment.current_deliverable,
-            submission.deliverable_number + 1,
-        )
-    else:
-        enrollment.status = EnrollmentStatus.COMPLETED
-
-    db.add(evaluation)
     await db.commit()
-    await db.refresh(evaluation)
-
-    return evaluation
 
 
 async def send_feedback_email(
@@ -309,7 +280,7 @@ async def send_feedback_email(
 async def run_evaluation(
     submission_id: int,
     db: AsyncSession,
-) -> Evaluation:
+) -> Evaluation | None:
     submission, enrollment, student, project = await _fetch_submission_graph(
         submission_id=submission_id,
         db=db,
@@ -362,12 +333,13 @@ async def run_evaluation(
         print("[AI DISPATCHER] Gemini evaluation failed. Creating fallback evaluation.")
         print(traceback.format_exc())
 
-        evaluation = await _save_fallback_evaluation(
+        await _mark_evaluation_failed(
             submission=submission,
-            enrollment=enrollment,
             error=exc,
             db=db,
         )
+
+        return None
 
     try:
         await send_feedback_email(
