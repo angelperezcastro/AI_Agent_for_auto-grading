@@ -8,14 +8,17 @@ class GmailAccountResolutionError(RuntimeError):
     pass
 
 
-async def resolve_sender_account(project_id: int, db: AsyncSession) -> GmailAccount:
+async def resolve_sender_account(
+    project_id: int,
+    db: AsyncSession,
+) -> GmailAccount:
     """
     Resolves which Gmail account must send emails for a project.
 
     Priority:
     1. Project-level Gmail account.
     2. Subject-level Gmail account.
-    3. Professor active fallback account.
+    3. Professor personal active account, preferably unassigned to any subject.
     4. Clear failure.
     """
 
@@ -33,23 +36,30 @@ async def resolve_sender_account(project_id: int, db: AsyncSession) -> GmailAcco
             f"Subject {project.subject_id} not found while resolving Gmail sender."
         )
 
+    professor_id = subject.professor_id
+
     # 1. Project-level account.
     if getattr(project, "gmail_account_id", None):
         project_account = await db.get(GmailAccount, project.gmail_account_id)
 
-        if project_account and project_account.is_active:
+        if (
+            project_account
+            and project_account.is_active
+            and project_account.professor_id == professor_id
+        ):
             return project_account
 
         raise GmailAccountResolutionError(
             f"Project {project.id} has gmail_account_id={project.gmail_account_id}, "
-            "but that account does not exist or is inactive."
+            "but that account does not exist, is inactive, or does not belong to "
+            "the professor who owns the subject."
         )
 
     # 2. Subject-level account.
     subject_account_result = await db.execute(
         select(GmailAccount)
+        .where(GmailAccount.professor_id == professor_id)
         .where(GmailAccount.subject_id == subject.id)
-        .where(GmailAccount.professor_id == subject.professor_id)
         .where(GmailAccount.is_active.is_(True))
         .order_by(GmailAccount.id.asc())
     )
@@ -58,17 +68,32 @@ async def resolve_sender_account(project_id: int, db: AsyncSession) -> GmailAcco
     if subject_account:
         return subject_account
 
-    # 3. Professor fallback account.
-    professor_account_result = await db.execute(
+    # 3A. Professor personal account, preferably not assigned to any subject.
+    personal_account_result = await db.execute(
         select(GmailAccount)
-        .where(GmailAccount.professor_id == subject.professor_id)
+        .where(GmailAccount.professor_id == professor_id)
+        .where(GmailAccount.subject_id.is_(None))
         .where(GmailAccount.is_active.is_(True))
         .order_by(GmailAccount.id.asc())
     )
-    professor_account = professor_account_result.scalars().first()
+    personal_account = personal_account_result.scalars().first()
 
-    if professor_account:
-        return professor_account
+    if personal_account:
+        return personal_account
+
+    # 3B. Last-resort professor account.
+    # This keeps the app usable even if the professor has accounts connected
+    # but none marked as personal.
+    fallback_account_result = await db.execute(
+        select(GmailAccount)
+        .where(GmailAccount.professor_id == professor_id)
+        .where(GmailAccount.is_active.is_(True))
+        .order_by(GmailAccount.id.asc())
+    )
+    fallback_account = fallback_account_result.scalars().first()
+
+    if fallback_account:
+        return fallback_account
 
     # 4. No account configured.
     raise GmailAccountResolutionError(
