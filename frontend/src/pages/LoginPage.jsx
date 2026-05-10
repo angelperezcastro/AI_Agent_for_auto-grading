@@ -4,16 +4,45 @@ import { useAuth } from "../context/useAuth";
 import { getApiErrorMessage } from "../services/api";
 
 function normalizeRole(role) {
-  return String(role || "").toLowerCase();
+  return String(role || "").trim().toLowerCase();
+}
+
+function getStoredUserRole() {
+  try {
+    const storedUser = localStorage.getItem("user");
+
+    if (!storedUser) {
+      return null;
+    }
+
+    const parsedUser = JSON.parse(storedUser);
+    return normalizeRole(parsedUser?.role);
+  } catch {
+    return null;
+  }
+}
+
+function getLoggedUserRole(loggedUser) {
+  return (
+    normalizeRole(loggedUser?.role) ||
+    normalizeRole(loggedUser?.user?.role) ||
+    getStoredUserRole()
+  );
 }
 
 function getSafeRedirectPath(pathname, role) {
+  const normalizedRole = normalizeRole(role);
+
   if (!pathname || pathname === "/login" || pathname === "/register") {
-    return role === "professor" ? "/professor/dashboard" : "/dashboard";
+    return normalizedRole === "professor"
+      ? "/professor/dashboard"
+      : "/dashboard";
   }
 
-  if (role === "professor") {
-    return pathname.startsWith("/professor") ? pathname : "/professor/dashboard";
+  if (normalizedRole === "professor") {
+    return pathname.startsWith("/professor")
+      ? pathname
+      : "/professor/dashboard";
   }
 
   if (pathname.startsWith("/professor")) {
@@ -60,7 +89,7 @@ export default function LoginPage() {
 
     try {
       const loggedUser = await login(form.email.trim(), form.password);
-      const role = normalizeRole(loggedUser?.role || loggedUser?.user?.role);
+      const role = getLoggedUserRole(loggedUser);
       const destination = getSafeRedirectPath(redirectFrom, role);
 
       navigate(destination, { replace: true });
@@ -120,6 +149,7 @@ export default function LoginPage() {
               >
                 Email
               </label>
+
               <input
                 id="email"
                 name="email"
@@ -141,6 +171,7 @@ export default function LoginPage() {
               >
                 Password
               </label>
+
               <input
                 id="password"
                 name="password"

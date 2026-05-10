@@ -1,6 +1,15 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/useAuth";
 
+function getDisplayName(user) {
+  return (
+    user?.full_name ||
+    user?.name ||
+    user?.email?.split("@")[0] ||
+    "Professor"
+  );
+}
+
 export default function ProfessorNavbar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -15,18 +24,22 @@ export default function ProfessorNavbar() {
 
   const getLinkClass = ({ isActive }) =>
     isActive
-      ? `${linkBase} bg-slate-900 text-white`
+      ? `${linkBase} bg-slate-900 text-white shadow-sm`
       : `${linkBase} text-slate-600 hover:bg-slate-100 hover:text-slate-900`;
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <div>
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-4">
+        <button
+          type="button"
+          onClick={() => navigate("/professor/dashboard")}
+          className="text-left"
+        >
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
             Professor Panel
           </p>
           <h1 className="text-lg font-black text-slate-900">SE Autograder</h1>
-        </div>
+        </button>
 
         <nav className="flex items-center gap-2">
           <NavLink to="/professor/dashboard" className={getLinkClass}>
@@ -38,6 +51,7 @@ export default function ProfessorNavbar() {
           </NavLink>
 
           <NavLink to="/professor/settings" className={getLinkClass}>
+            <span className="mr-1">⚙</span>
             Settings
           </NavLink>
         </nav>
@@ -45,9 +59,11 @@ export default function ProfessorNavbar() {
         <div className="flex items-center gap-4">
           <div className="hidden text-right sm:block">
             <p className="text-sm font-semibold text-slate-800">
-              {user?.email || "Professor"}
+              {getDisplayName(user)}
             </p>
-            <p className="text-xs text-slate-500">Professor account</p>
+            <p className="text-xs text-slate-500">
+              {user?.email || "Professor account"}
+            </p>
           </div>
 
           <button
