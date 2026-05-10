@@ -84,6 +84,18 @@ export async function disconnectGmailAccount(gmailAccountId) {
   }
 }
 
+export async function sendTestEmail(gmailAccountId) {
+  try {
+    const response = await api.post(
+      `/settings/gmail-accounts/${gmailAccountId}/test`
+    );
+
+    return extractData(response);
+  } catch (error) {
+    raiseApiError(error, "Could not send test email.");
+  }
+}
+
 export async function getGmailAuthorizationUrl() {
   try {
     const response = await api.get("/auth/gmail/authorize", {

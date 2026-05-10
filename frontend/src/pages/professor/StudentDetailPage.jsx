@@ -39,6 +39,23 @@ function formatDate(value) {
   }).format(date);
 }
 
+function normalizeEmailType(type) {
+  const value = String(type || "");
+
+  if (value === "professor_notification") {
+    return "Professor notification";
+  }
+
+  if (value === "override_feedback") {
+    return "Override feedback";
+  }
+
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function getEffectiveScore(evaluation) {
   if (!evaluation) return null;
 
@@ -87,6 +104,104 @@ function EmailStatusItem({ label, sent }) {
       <span className="mr-2">{sent ? "✓" : "—"}</span>
       {label}
     </div>
+  );
+}
+
+function EmailHistory({ logs }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const safeLogs = Array.isArray(logs) ? logs : [];
+  const failedCount = safeLogs.filter((log) => log.error_message).length;
+
+  return (
+    <section className="rounded-2xl border border-slate-200">
+      <button
+        type="button"
+        onClick={() => setIsOpen((previous) => !previous)}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+      >
+        <div>
+          <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">
+            Email History
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            {safeLogs.length} email event{safeLogs.length === 1 ? "" : "s"}
+            {failedCount > 0 ? ` · ${failedCount} failed` : ""}
+          </p>
+        </div>
+
+        <span className="rounded-full border border-slate-200 px-3 py-1 text-xs font-bold text-slate-600">
+          {isOpen ? "Hide" : "Show"}
+        </span>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-slate-200 p-5">
+          {safeLogs.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
+              No email log entries recorded for this submission.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-slate-200">
+              <table className="min-w-full divide-y divide-slate-200">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
+                      Recipient
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
+                      Gmail Account
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
+                      Sent At
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {safeLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td className="px-4 py-4 text-sm font-bold text-slate-900">
+                        {normalizeEmailType(log.email_type)}
+                      </td>
+
+                      <td className="px-4 py-4 text-sm text-slate-600">
+                        {log.recipient_email}
+                      </td>
+
+                      <td className="px-4 py-4 text-sm text-slate-600">
+                        {log.gmail_account_used || "—"}
+                      </td>
+
+                      <td className="px-4 py-4 text-sm text-slate-600">
+                        {formatDate(log.sent_at)}
+                      </td>
+
+                      <td className="px-4 py-4">
+                        {log.error_message ? (
+                          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                            Failed: {log.error_message}
+                          </div>
+                        ) : (
+                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                            Sent
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -226,7 +341,9 @@ function OverridePanel({ evaluation, onSaved }) {
 }
 
 function DeliverableCard({ deliverable, onRefresh }) {
-  const meta = DELIVERABLES.find((item) => item.number === deliverable.deliverable_number);
+  const meta = DELIVERABLES.find(
+    (item) => item.number === deliverable.deliverable_number
+  );
   const evaluation = deliverable.evaluation;
 
   return (
@@ -309,6 +426,8 @@ function DeliverableCard({ deliverable, onRefresh }) {
               </div>
             )}
           </section>
+
+          <EmailHistory logs={deliverable.email_logs} />
 
           {evaluation ? (
             <section className="space-y-5">

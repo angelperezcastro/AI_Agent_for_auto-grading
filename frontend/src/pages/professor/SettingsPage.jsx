@@ -5,6 +5,7 @@ import {
   getGmailAccounts,
   getGmailAuthorizationUrl,
   getSubjectsWithProjects,
+  sendTestEmail,
   setDefaultGmailAccountForSubject,
 } from "../../services/professorWeek5Api";
 
@@ -39,6 +40,7 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [testingAccountId, setTestingAccountId] = useState(null);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -184,6 +186,24 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSendTestEmail(account) {
+    setTestingAccountId(account.id);
+    setError("");
+    setSuccess("");
+
+    try {
+      const result = await sendTestEmail(account.id);
+
+      setSuccess(
+        `Test email sent from ${result.gmail_account_used} to ${result.recipient_email}.`
+      );
+    } catch (err) {
+      setError(err.message || "Could not send test email.");
+    } finally {
+      setTestingAccountId(null);
+    }
+  }
+
   async function handleAssignProject(project, rawValue) {
     setActionLoading(true);
     setError("");
@@ -248,9 +268,8 @@ export default function SettingsPage() {
           <div>
             <h1 className="text-3xl font-black">Gmail Account Management</h1>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Connect Gmail accounts and assign them to subjects or projects.
-              This controls which account sends submission confirmations,
-              professor notifications and AI feedback.
+              Connect Gmail accounts, test them and assign them to subjects or
+              projects.
             </p>
           </div>
 
@@ -284,7 +303,7 @@ export default function SettingsPage() {
               Connected Gmail Accounts
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              These accounts can be assigned to projects as senders.
+              Send a test email before assigning an account to a live project.
             </p>
           </div>
 
@@ -334,7 +353,7 @@ export default function SettingsPage() {
                   </span>
                 </div>
 
-                <div className="mt-5 flex items-center justify-between gap-3">
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-slate-500">
                     Subject default:{" "}
                     <span className="font-semibold text-slate-700">
@@ -344,14 +363,31 @@ export default function SettingsPage() {
                     </span>
                   </p>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDisconnect(account)}
-                    disabled={actionLoading}
-                    className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60"
-                  >
-                    Disconnect
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSendTestEmail(account)}
+                      disabled={
+                        testingAccountId === account.id ||
+                        actionLoading ||
+                        !account.is_active
+                      }
+                      className="rounded-xl border border-emerald-200 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                    >
+                      {testingAccountId === account.id
+                        ? "Sending..."
+                        : "Send Test Email"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDisconnect(account)}
+                      disabled={actionLoading || testingAccountId === account.id}
+                      className="rounded-xl border border-red-200 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}
