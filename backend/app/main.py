@@ -11,6 +11,7 @@ from app.routers.projects import router as projects_router
 from app.routers.settings import router as settings_router
 from app.routers.subjects import router as subjects_router
 from app.routers.submissions import router as submissions_router
+from app.routers.professor_detail import router as professor_detail_router
 
 app = FastAPI(
     title="SE Autograder API",
@@ -40,6 +41,7 @@ app.include_router(enrollments_router)
 app.include_router(submissions_router)
 app.include_router(evaluations_router)
 app.include_router(professor_router)
+app.include_router(professor_detail_router)
 
 @app.get("/")
 async def root():

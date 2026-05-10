@@ -97,17 +97,13 @@ async def get_submission_evaluation(
     return EvaluationRead.model_validate(evaluation)
 
 
-@router.post(
-    "/evaluations/{evaluation_id}/override",
-    response_model=EvaluationRead,
-)
-async def override_evaluation(
+async def apply_override(
     evaluation_id: int,
     payload: EvaluationOverrideRequest,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
+    db: AsyncSession,
+    current_user: User,
+) -> Evaluation:
     if current_user.role != "professor":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -140,3 +136,43 @@ async def override_evaluation(
     )
 
     return evaluation
+
+
+@router.post(
+    "/evaluations/{evaluation_id}/override",
+    response_model=EvaluationRead,
+)
+async def override_evaluation_post(
+    evaluation_id: int,
+    payload: EvaluationOverrideRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await apply_override(
+        evaluation_id=evaluation_id,
+        payload=payload,
+        background_tasks=background_tasks,
+        db=db,
+        current_user=current_user,
+    )
+
+
+@router.patch(
+    "/evaluations/{evaluation_id}/override",
+    response_model=EvaluationRead,
+)
+async def override_evaluation_patch(
+    evaluation_id: int,
+    payload: EvaluationOverrideRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return await apply_override(
+        evaluation_id=evaluation_id,
+        payload=payload,
+        background_tasks=background_tasks,
+        db=db,
+        current_user=current_user,
+    )

@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token as google_id_token
 from google_auth_oauthlib.flow import Flow
@@ -102,6 +102,51 @@ def serialize_credentials(credentials) -> dict:
     }
 
 
+def build_popup_response(*, payload: dict, title: str, heading: str, message: str, status_code: int) -> HTMLResponse:
+    """
+    Returns a small HTML page for OAuth popup flows.
+
+    The popup notifies the main React window through postMessage and then closes itself.
+    This keeps the main app on /professor/settings instead of navigating away during OAuth.
+    """
+    serialized_payload = json.dumps(payload)
+
+    return HTMLResponse(
+        status_code=status_code,
+        content=f"""
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1" />
+            <title>{title}</title>
+          </head>
+          <body style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 32px; color: #0f172a;">
+            <main style="max-width: 560px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 24px; padding: 28px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);">
+              <h1 style="font-size: 22px; margin: 0 0 12px;">{heading}</h1>
+              <p style="font-size: 15px; line-height: 1.6; color: #475569; margin: 0 0 20px;">{message}</p>
+              <button onclick="window.close()" style="border: 0; background: #0f172a; color: white; border-radius: 12px; padding: 10px 16px; font-weight: 700; cursor: pointer;">
+                Close window
+              </button>
+            </main>
+
+            <script>
+              const payload = {serialized_payload};
+
+              if (window.opener) {{
+                window.opener.postMessage(payload, "*");
+              }}
+
+              window.setTimeout(() => {{
+                window.close();
+              }}, 600);
+            </script>
+          </body>
+        </html>
+        """,
+    )
+
+
 @router.get("/authorize")
 async def gmail_authorize(
     return_url: bool = Query(
@@ -138,16 +183,30 @@ async def gmail_callback(
 ):
     error = request.query_params.get("error")
     if error:
-        raise HTTPException(
+        return build_popup_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Google OAuth error: {error}",
+            title="Gmail connection failed",
+            heading="Gmail connection failed",
+            message=f"Google OAuth returned an error: {error}",
+            payload={
+                "type": "GMAIL_CONNECTED",
+                "success": False,
+                "message": f"Google OAuth error: {error}",
+            },
         )
 
     state = request.query_params.get("state")
     if not state:
-        raise HTTPException(
+        return build_popup_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing state in Google callback",
+            title="Gmail connection failed",
+            heading="Missing OAuth state",
+            message="The OAuth callback did not include a valid state parameter.",
+            payload={
+                "type": "GMAIL_CONNECTED",
+                "success": False,
+                "message": "Missing state in Google callback",
+            },
         )
 
     professor_id, code_verifier = decode_oauth_state(state)
@@ -161,9 +220,16 @@ async def gmail_callback(
     credentials = flow.credentials
 
     if not credentials.id_token:
-        raise HTTPException(
+        return build_popup_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google did not return an ID token. Check requested scopes.",
+            title="Gmail connection failed",
+            heading="Google did not return an ID token",
+            message="Check that the OAuth scopes include OpenID and user email access.",
+            payload={
+                "type": "GMAIL_CONNECTED",
+                "success": False,
+                "message": "Google did not return an ID token. Check requested scopes.",
+            },
         )
 
     id_info = google_id_token.verify_oauth2_token(
@@ -176,15 +242,29 @@ async def gmail_callback(
     email_verified = id_info.get("email_verified", False)
 
     if not account_email:
-        raise HTTPException(
+        return build_popup_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not determine the authorized Google account email",
+            title="Gmail connection failed",
+            heading="Could not detect Gmail account email",
+            message="Google did not provide an email address for the authorized account.",
+            payload={
+                "type": "GMAIL_CONNECTED",
+                "success": False,
+                "message": "Could not determine the authorized Google account email",
+            },
         )
 
     if not email_verified:
-        raise HTTPException(
+        return build_popup_response(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Google account email is not verified",
+            title="Gmail connection failed",
+            heading="Google account email is not verified",
+            message="Use a verified Google account to connect Gmail sending.",
+            payload={
+                "type": "GMAIL_CONNECTED",
+                "success": False,
+                "message": "Google account email is not verified",
+            },
         )
 
     result = await db.execute(
@@ -218,9 +298,14 @@ async def gmail_callback(
     await db.commit()
     await db.refresh(gmail_account)
 
-    return JSONResponse(
+    return build_popup_response(
         status_code=status.HTTP_200_OK,
-        content={
+        title="Gmail connected",
+        heading="Gmail account connected successfully",
+        message=f"{gmail_account.account_email} is now available in your professor Settings panel.",
+        payload={
+            "type": "GMAIL_CONNECTED",
+            "success": True,
             "message": "Gmail account connected successfully",
             "gmail_account_id": gmail_account.id,
             "account_email": gmail_account.account_email,
