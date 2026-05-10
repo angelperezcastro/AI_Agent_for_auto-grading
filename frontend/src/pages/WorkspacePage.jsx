@@ -6,6 +6,7 @@ import SubmissionForm from "../components/SubmissionForm";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
 import { formatDateTime, getDeadlineCountdown } from "../utils/dates";
+import { SUBMISSION_EMAIL_FAILED_MESSAGE } from "../utils/emailUxMessages";
 
 function normalizeSubmissionList(data) {
   if (Array.isArray(data)) {
@@ -140,6 +141,13 @@ function getStepLineClass(status) {
   }
 
   return "bg-slate-200";
+}
+
+function hasEmailDeliveryFailure(submissionResponse) {
+  return (
+    submissionResponse?.email_sent === false ||
+    Boolean(submissionResponse?.email_error)
+  );
 }
 
 function DeliverableStep({
@@ -311,6 +319,7 @@ export default function WorkspacePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [noticeType, setNoticeType] = useState("success");
 
   const submissionsByNumber = useMemo(() => {
     return submissions.reduce((acc, submission) => {
@@ -395,6 +404,7 @@ export default function WorkspacePage() {
 
   function handleWrite(deliverable) {
     setNotice("");
+    setNoticeType("success");
     setActiveDeliverable(deliverable);
 
     window.scrollTo({
@@ -403,10 +413,16 @@ export default function WorkspacePage() {
     });
   }
 
-  async function handleSubmitted() {
-    setNotice(
-      "Submitted! The AI is now evaluating your work. You will receive your score and feedback by email within 1–2 minutes."
-    );
+  async function handleSubmitted(submissionResponse) {
+    if (hasEmailDeliveryFailure(submissionResponse)) {
+      setNotice(SUBMISSION_EMAIL_FAILED_MESSAGE);
+      setNoticeType("warning");
+    } else {
+      setNotice(
+        "Submitted! The AI is now evaluating your work. You will receive your score and feedback by email within 1–2 minutes."
+      );
+      setNoticeType("success");
+    }
 
     await refreshWorkspace();
 
@@ -414,6 +430,11 @@ export default function WorkspacePage() {
       await refreshWorkspace();
     }, 2500);
   }
+
+  const noticeClass =
+    noticeType === "warning"
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : "border-emerald-200 bg-emerald-50 text-emerald-800";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -476,7 +497,9 @@ export default function WorkspacePage() {
         </section>
 
         {notice && (
-          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-800">
+          <div
+            className={`mb-6 rounded-2xl border px-5 py-4 text-sm font-medium ${noticeClass}`}
+          >
             {notice}
           </div>
         )}
@@ -501,7 +524,7 @@ export default function WorkspacePage() {
                   Deliverable timeline
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Current open deliverable: {" "}
+                  Current open deliverable:{" "}
                   <span className="font-semibold text-slate-800">
                     {currentOpenDeliverable
                       ? `Deliverable ${currentOpenDeliverable}`

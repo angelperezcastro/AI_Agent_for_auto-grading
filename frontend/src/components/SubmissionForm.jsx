@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { api, getApiErrorMessage } from "../services/api";
+import { SUBMISSION_EMAIL_FAILED_MESSAGE } from "../utils/emailUxMessages";
 
 function getDeliverableGuidance(deliverableNumber) {
   const guidance = {
@@ -59,6 +60,13 @@ function countWords(text) {
     .filter(Boolean).length;
 }
 
+function hasEmailDeliveryFailure(submissionResponse) {
+  return (
+    submissionResponse?.email_sent === false ||
+    Boolean(submissionResponse?.email_error)
+  );
+}
+
 export default function SubmissionForm({
   enrollmentId,
   deliverable,
@@ -68,6 +76,7 @@ export default function SubmissionForm({
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submittedMessage, setSubmittedMessage] = useState("");
+  const [emailWarning, setEmailWarning] = useState("");
   const [error, setError] = useState("");
 
   const guidance = getDeliverableGuidance(deliverable.number);
@@ -86,24 +95,34 @@ export default function SubmissionForm({
 
     setSubmitting(true);
     setError("");
+    setEmailWarning("");
     setSubmittedMessage("");
 
     try {
-      await api.post("/submissions", {
+      const response = await api.post("/submissions", {
         enrollment_id: Number(enrollmentId),
         deliverable_number: deliverable.number,
         content: content.trim(),
       });
 
+      const submissionResponse = response.data;
+      const emailFailed = hasEmailDeliveryFailure(submissionResponse);
+
       setSubmittedMessage(
         "Submitted! The AI is now evaluating your work. You will receive your score and feedback by email within 1–2 minutes."
       );
 
-      await onSubmitted?.();
+      if (emailFailed) {
+        setEmailWarning(SUBMISSION_EMAIL_FAILED_MESSAGE);
+      }
 
-      setTimeout(() => {
-        onCancel?.();
-      }, 1800);
+      await onSubmitted?.(submissionResponse);
+
+      if (!emailFailed) {
+        setTimeout(() => {
+          onCancel?.();
+        }, 1800);
+      }
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -172,6 +191,12 @@ export default function SubmissionForm({
           {submittedMessage && (
             <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-800">
               {submittedMessage}
+            </div>
+          )}
+
+          {emailWarning && (
+            <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-medium text-amber-800">
+              {emailWarning}
             </div>
           )}
 
