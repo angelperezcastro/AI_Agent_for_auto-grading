@@ -646,3 +646,54 @@ a {
     transform: none !important;
   }
 }
+
+@layer utilities {
+  .workspace-locked-step:hover .workspace-lock-icon,
+  .workspace-locked-step:focus-within .workspace-lock-icon,
+  .workspace-locked-step:active .workspace-lock-icon,
+  .workspace-lock-attempt {
+    animation: workspaceLockShake 360ms cubic-bezier(0.36, 0.07, 0.19, 0.97)
+      both;
+    transform-origin: center;
+  }
+
+  .workspace-locked-step:hover .workspace-locked-reason,
+  .workspace-locked-step:focus-within .workspace-locked-reason {
+    border-color: rgb(203 213 225);
+    background-color: rgb(241 245 249);
+    color: rgb(51 65 85);
+  }
+}
+
+@keyframes workspaceLockShake {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+
+  20% {
+    transform: translateX(-1.5px) rotate(-4deg);
+  }
+
+  40% {
+    transform: translateX(1.5px) rotate(4deg);
+  }
+
+  60% {
+    transform: translateX(-1px) rotate(-3deg);
+  }
+
+  80% {
+    transform: translateX(1px) rotate(3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-locked-step:hover .workspace-lock-icon,
+  .workspace-locked-step:focus-within .workspace-lock-icon,
+  .workspace-locked-step:active .workspace-lock-icon,
+  .workspace-lock-attempt {
+    animation: none !important;
+    transform: none !important;
+  }
+}

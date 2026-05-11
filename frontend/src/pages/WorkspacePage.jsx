@@ -122,7 +122,8 @@ function getTimelineStatusMeta(status) {
       badgeClass: "border-slate-200 bg-slate-100 text-slate-500",
       nodeClass: "border-slate-300 bg-white text-slate-400",
       lineClass: "bg-slate-200",
-      cardClass: "border-slate-200 bg-white/75 opacity-75",
+      cardClass:
+        "border-slate-200 bg-white/75 opacity-80 hover:opacity-100 focus-within:opacity-100",
     },
     open: {
       label: "Open",
@@ -180,7 +181,7 @@ function hasEmailDeliveryFailure(submissionResponse) {
   );
 }
 
-function TimelineNode({ deliverable, status, isLast }) {
+function TimelineNode({ deliverable, status, isLast, lockedAttempted = false }) {
   const statusMeta = getTimelineStatusMeta(status);
   const isLocked = status === "locked";
   const isGraded = status === "graded";
@@ -191,7 +192,17 @@ function TimelineNode({ deliverable, status, isLast }) {
         aria-label={`Deliverable ${deliverable.number}: ${statusMeta.label}`}
         className={`z-10 flex h-12 w-12 items-center justify-center rounded-2xl border-2 text-sm font-black transition md:h-14 md:w-14 ${statusMeta.nodeClass}`}
       >
-        {isLocked && <span aria-hidden="true">🔒</span>}
+        {isLocked && (
+          <span
+            aria-hidden="true"
+            className={[
+              "workspace-lock-icon inline-flex",
+              lockedAttempted ? "workspace-lock-attempt" : "",
+            ].join(" ")}
+          >
+            🔒
+          </span>
+        )}
 
         {!isLocked && isGraded && (
           <svg
@@ -245,6 +256,8 @@ function DeliverableStep({
   index,
   onWrite,
 }) {
+  const [lockedAttempted, setLockedAttempted] = useState(false);
+
   const evaluation = getEvaluation(submission);
   const score = getScore(evaluation);
   const submittedAt = formatDateTime(submission?.submitted_at);
@@ -256,15 +269,59 @@ function DeliverableStep({
   const isGraded = status === "graded";
   const isOverdue = status === "overdue";
 
+  const lockedReasonId = `locked-reason-deliverable-${deliverable.number}`;
+
+  function triggerLockedFeedback() {
+    if (!isLocked) {
+      return;
+    }
+
+    setLockedAttempted(true);
+
+    window.setTimeout(() => {
+      setLockedAttempted(false);
+    }, 420);
+  }
+
+  function handleLockedKeyDown(event) {
+    if (!isLocked) {
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      triggerLockedFeedback();
+    }
+  }
+
   return (
     <li
-      className="workspace-timeline-step-enter relative flex gap-4 md:gap-5"
+      className={[
+        "workspace-timeline-step-enter relative flex gap-4 md:gap-5",
+        isLocked ? "workspace-locked-step" : "",
+      ].join(" ")}
       style={getStepDelayStyle(index)}
     >
-      <TimelineNode deliverable={deliverable} status={status} isLast={isLast} />
+      <TimelineNode
+        deliverable={deliverable}
+        status={status}
+        isLast={isLast}
+        lockedAttempted={lockedAttempted}
+      />
 
       <article
-        className={`mb-6 flex-1 rounded-3xl border p-5 shadow-sm transition duration-200 md:p-6 ${statusMeta.cardClass}`}
+        tabIndex={isLocked ? 0 : undefined}
+        aria-disabled={isLocked ? "true" : undefined}
+        aria-describedby={isLocked ? lockedReasonId : undefined}
+        onClick={isLocked ? triggerLockedFeedback : undefined}
+        onKeyDown={isLocked ? handleLockedKeyDown : undefined}
+        className={[
+          "mb-6 flex-1 rounded-3xl border p-5 shadow-sm transition duration-200 md:p-6",
+          isLocked
+            ? "cursor-not-allowed outline-none focus:ring-4 focus:ring-slate-200"
+            : "",
+          statusMeta.cardClass,
+        ].join(" ")}
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
@@ -339,7 +396,16 @@ function DeliverableStep({
         </div>
 
         {isLocked && (
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div
+            id={lockedReasonId}
+            aria-live={lockedAttempted ? "polite" : "off"}
+            className={[
+              "workspace-locked-reason mt-5 rounded-2xl border px-4 py-3 text-sm transition",
+              lockedAttempted
+                ? "border-slate-300 bg-slate-100 text-slate-700 shadow-sm"
+                : "border-slate-200 bg-slate-50 text-slate-600",
+            ].join(" ")}
+          >
             <div className="flex gap-3">
               <span aria-hidden="true" className="mt-0.5">
                 🔒
@@ -348,6 +414,11 @@ function DeliverableStep({
               <div>
                 <p className="font-bold text-slate-700">Locked deliverable</p>
                 <p className="mt-1 leading-6">{deliverable.lockedReason}</p>
+
+                <p className="mt-2 text-xs font-medium text-slate-500">
+                  Complete and receive feedback for the previous deliverable to
+                  unlock this step.
+                </p>
               </div>
             </div>
           </div>
