@@ -217,7 +217,11 @@ async def gmail_callback(
         code_verifier=code_verifier,
     )
 
-    flow.fetch_token(authorization_response=str(request.url))
+    authorization_response = f"{settings.GOOGLE_REDIRECT_URI}?{request.url.query}"
+
+    flow.fetch_token(
+    authorization_response=authorization_response,
+)
     credentials = flow.credentials
 
     if not credentials.id_token:
