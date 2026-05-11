@@ -63,7 +63,7 @@ export default function RegisterPage() {
 
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center justify-center">
         <section className="auth-card-enter grid w-full overflow-hidden rounded-[2rem] border border-white/15 bg-white/[0.08] p-4 shadow-2xl shadow-slate-950/50 backdrop-blur-2xl sm:p-6 lg:grid-cols-[0.95fr_1.05fr] lg:gap-6">
-          <div className="rounded-[1.5rem] border border-white/15 bg-slate-950/55 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl sm:p-8">
+          <div className="auth-form-card-enter rounded-[1.5rem] border border-white/15 bg-slate-950/55 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl sm:p-8">
             <div className="mb-8">
               <p className="mb-3 text-sm font-semibold uppercase tracking-[0.22em] text-cyan-200">
                 SE Autograder
