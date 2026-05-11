@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import StatusBadge from "../../components/ui/StatusBadge";
 import {
   assignGmailAccountToProject,
@@ -11,6 +11,8 @@ import {
 } from "../../services/professorWeek5Api";
 
 const RECENTLY_CONNECTED_HIGHLIGHT_MS = 4200;
+const OAUTH_POPUP_CHECK_INTERVAL_MS = 700;
+const OAUTH_TOAST_VISIBLE_MS = 5200;
 
 function formatDate(value) {
   if (!value) return "—";
@@ -137,6 +139,186 @@ function getAccountErrorMessage(account) {
   );
 }
 
+function findConnectedAccountAfterOAuth(previousAccounts, nextAccounts, startedAt) {
+  const previousByEmail = new Map(
+    previousAccounts
+      .filter((account) => account?.account_email)
+      .map((account) => [account.account_email, account])
+  );
+
+  const startedAtMs = startedAt instanceof Date ? startedAt.getTime() : 0;
+
+  const newAccount = nextAccounts.find((account) => {
+    return account?.account_email && !previousByEmail.has(account.account_email);
+  });
+
+  if (newAccount) {
+    return newAccount;
+  }
+
+  const recentlyCreatedAccount = nextAccounts.find((account) => {
+    if (!account?.created_at) return false;
+
+    const createdAt = new Date(account.created_at).getTime();
+
+    if (Number.isNaN(createdAt)) return false;
+
+    return createdAt >= startedAtMs - 2000;
+  });
+
+  if (recentlyCreatedAccount) {
+    return recentlyCreatedAccount;
+  }
+
+  const reconnectedAccount = nextAccounts.find((account) => {
+    if (!account?.account_email) return false;
+
+    const previousAccount = previousByEmail.get(account.account_email);
+
+    if (!previousAccount) return false;
+
+    const previousStatus = getGmailAccountStatus(previousAccount);
+    const nextStatus = getGmailAccountStatus(account);
+
+    return previousStatus !== "connected" && nextStatus === "connected";
+  });
+
+  if (reconnectedAccount) {
+    return reconnectedAccount;
+  }
+
+  return null;
+}
+
+function OAuthConnectionToast({ toast, onDismiss }) {
+  if (!toast) return null;
+
+  const isSuccess = toast.type === "success";
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed right-4 top-4 z-50 w-[calc(100%-2rem)] max-w-md motion-safe:animate-[gmailToastIn_240ms_ease-out]"
+    >
+      <style>
+        {`
+          @keyframes gmailToastIn {
+            from {
+              opacity: 0;
+              transform: translateY(-10px) scale(0.98);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+            }
+          }
+        `}
+      </style>
+
+      <div
+        className={[
+          "overflow-hidden rounded-3xl border bg-white p-4 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5",
+          isSuccess ? "border-emerald-200" : "border-amber-200",
+        ].join(" ")}
+      >
+        <div className="flex gap-4">
+          <div
+            className={[
+              "relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
+              isSuccess
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-amber-50 text-amber-700",
+            ].join(" ")}
+          >
+            {isSuccess && (
+              <span
+                aria-hidden="true"
+                className="absolute inline-flex h-10 w-10 rounded-full bg-emerald-400 opacity-20 motion-safe:animate-ping motion-reduce:animate-none"
+              />
+            )}
+
+            {isSuccess ? (
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="relative h-6 w-6 motion-safe:animate-[gmailCheckPop_280ms_ease-out]"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+            ) : (
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-6 w-6"
+              >
+                <path d="M10.3 4.3 2.8 17.2A2 2 0 0 0 4.5 20h15a2 2 0 0 0 1.7-2.8L13.7 4.3a2 2 0 0 0-3.4 0Z" />
+                <path d="M12 9v4" />
+                <path d="M12 17h.01" />
+              </svg>
+            )}
+
+            <style>
+              {`
+                @keyframes gmailCheckPop {
+                  0% {
+                    opacity: 0;
+                    transform: scale(0.75);
+                  }
+                  70% {
+                    opacity: 1;
+                    transform: scale(1.12);
+                  }
+                  100% {
+                    opacity: 1;
+                    transform: scale(1);
+                  }
+                }
+              `}
+            </style>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p
+              className={[
+                "text-sm font-black",
+                isSuccess ? "text-emerald-900" : "text-amber-900",
+              ].join(" ")}
+            >
+              {toast.message}
+            </p>
+
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              {isSuccess
+                ? "The account list has been refreshed and the account is ready to use."
+                : "No Gmail account was connected. You can start the connection again."}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Dismiss notification"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-100"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GmailAccountCard({
   account,
   isHighlighted,
@@ -158,7 +340,7 @@ function GmailAccountCard({
         "hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md",
         "focus-within:ring-4 focus-within:ring-cyan-100",
         isHighlighted
-          ? "border-cyan-300 ring-4 ring-cyan-100 motion-safe:animate-pulse"
+          ? "border-cyan-300 ring-4 ring-cyan-100 motion-safe:animate-pulse motion-reduce:animate-none"
           : "border-slate-200",
       ].join(" ")}
     >
@@ -278,10 +460,19 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [testingAccountId, setTestingAccountId] = useState(null);
+  const [oauthConnecting, setOauthConnecting] = useState(false);
 
   const [recentlyConnectedEmail, setRecentlyConnectedEmail] = useState("");
+  const [oauthToast, setOauthToast] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const oauthPopupRef = useRef(null);
+  const oauthMonitorRef = useRef(null);
+  const oauthToastTimerRef = useRef(null);
+  const oauthCompletedRef = useRef(false);
+  const oauthStartedAtRef = useRef(null);
+  const oauthPreviousAccountsRef = useRef([]);
 
   const accountsBySubjectId = useMemo(() => {
     const map = new Map();
@@ -295,6 +486,39 @@ export default function SettingsPage() {
     return map;
   }, [gmailAccounts]);
 
+  function clearOAuthMonitor() {
+    if (oauthMonitorRef.current) {
+      window.clearInterval(oauthMonitorRef.current);
+      oauthMonitorRef.current = null;
+    }
+  }
+
+  function showOAuthToast(type, message) {
+    if (oauthToastTimerRef.current) {
+      window.clearTimeout(oauthToastTimerRef.current);
+      oauthToastTimerRef.current = null;
+    }
+
+    setOauthToast({
+      id: Date.now(),
+      type,
+      message,
+    });
+
+    oauthToastTimerRef.current = window.setTimeout(() => {
+      setOauthToast(null);
+      oauthToastTimerRef.current = null;
+    }, OAUTH_TOAST_VISIBLE_MS);
+  }
+
+  function markRecentlyConnected(email) {
+    setRecentlyConnectedEmail(email || "");
+
+    window.setTimeout(() => {
+      setRecentlyConnectedEmail("");
+    }, RECENTLY_CONNECTED_HIGHLIGHT_MS);
+  }
+
   async function loadSettings() {
     setError("");
 
@@ -304,10 +528,23 @@ export default function SettingsPage() {
         getSubjectsWithProjects(),
       ]);
 
-      setGmailAccounts(Array.isArray(accountsData) ? accountsData : []);
-      setSubjects(Array.isArray(subjectsData) ? subjectsData : []);
+      const safeAccounts = Array.isArray(accountsData) ? accountsData : [];
+      const safeSubjects = Array.isArray(subjectsData) ? subjectsData : [];
+
+      setGmailAccounts(safeAccounts);
+      setSubjects(safeSubjects);
+
+      return {
+        accounts: safeAccounts,
+        subjects: safeSubjects,
+      };
     } catch (err) {
       setError(err.message || "Could not load settings.");
+
+      return {
+        accounts: null,
+        subjects: null,
+      };
     } finally {
       setLoading(false);
     }
@@ -356,20 +593,22 @@ export default function SettingsPage() {
         return;
       }
 
+      oauthCompletedRef.current = true;
+      clearOAuthMonitor();
+      setOauthConnecting(false);
+
       if (data.success) {
-        setSuccess(`Gmail account connected: ${data.account_email}`);
-        setRecentlyConnectedEmail(data.account_email || "");
+        setSuccess("Gmail account connected successfully");
+        showOAuthToast("success", "Gmail account connected successfully");
+        markRecentlyConnected(data.account_email || "");
 
         loadSettings();
-
-        window.setTimeout(() => {
-          setRecentlyConnectedEmail("");
-        }, RECENTLY_CONNECTED_HIGHLIGHT_MS);
       } else {
         setError(
           data.message ||
-            "Gmail connection failed. Please try connecting the account again."
+            "Gmail connection was not completed. Please try connecting the account again."
         );
+        showOAuthToast("warning", "Gmail connection was not completed");
       }
     }
 
@@ -380,10 +619,64 @@ export default function SettingsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      clearOAuthMonitor();
+
+      if (oauthToastTimerRef.current) {
+        window.clearTimeout(oauthToastTimerRef.current);
+      }
+    };
+  }, []);
+
+  function startOAuthPopupMonitor() {
+    clearOAuthMonitor();
+
+    oauthMonitorRef.current = window.setInterval(async () => {
+      const popup = oauthPopupRef.current;
+
+      if (!popup || !popup.closed) {
+        return;
+      }
+
+      clearOAuthMonitor();
+      setOauthConnecting(false);
+
+      if (oauthCompletedRef.current) {
+        return;
+      }
+
+      const { accounts } = await loadSettings();
+
+      const connectedAccount = findConnectedAccountAfterOAuth(
+        oauthPreviousAccountsRef.current,
+        accounts || [],
+        oauthStartedAtRef.current
+      );
+
+      if (connectedAccount) {
+        oauthCompletedRef.current = true;
+        setSuccess("Gmail account connected successfully");
+        showOAuthToast("success", "Gmail account connected successfully");
+        markRecentlyConnected(connectedAccount.account_email || "");
+        return;
+      }
+
+      setError("Gmail connection was not completed.");
+      showOAuthToast("warning", "Gmail connection was not completed");
+    }, OAUTH_POPUP_CHECK_INTERVAL_MS);
+  }
+
   async function handleConnectGmail() {
     setActionLoading(true);
+    setOauthConnecting(true);
     setError("");
     setSuccess("");
+    setOauthToast(null);
+
+    oauthCompletedRef.current = false;
+    oauthStartedAtRef.current = new Date();
+    oauthPreviousAccountsRef.current = gmailAccounts;
 
     try {
       const authorizationUrl = await getGmailAuthorizationUrl();
@@ -403,8 +696,14 @@ export default function SettingsPage() {
         throw new Error("Popup blocked. Allow popups and try again.");
       }
 
-      setSuccess("Gmail authorization window opened.");
+      oauthPopupRef.current = popup;
+      startOAuthPopupMonitor();
+
+      setSuccess(
+        "Gmail authorization window opened. Complete the Google step in the popup."
+      );
     } catch (err) {
+      setOauthConnecting(false);
       setError(err.message || "Could not open Gmail authorization.");
     } finally {
       setActionLoading(false);
@@ -509,6 +808,11 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-8">
+      <OAuthConnectionToast
+        toast={oauthToast}
+        onDismiss={() => setOauthToast(null)}
+      />
+
       <section className="rounded-3xl bg-slate-900 p-8 text-white shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
           Professor Settings
@@ -526,13 +830,24 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={handleConnectGmail}
-            disabled={actionLoading}
+            disabled={actionLoading || oauthConnecting}
             className="rounded-2xl bg-white px-6 py-3 text-sm font-black text-slate-900 transition hover:-translate-y-0.5 hover:bg-slate-100 focus:outline-none focus:ring-4 focus:ring-white/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {actionLoading ? "Opening..." : "Connect New Gmail Account"}
+            {oauthConnecting
+              ? "Waiting for Gmail..."
+              : actionLoading
+                ? "Opening..."
+                : "Connect New Gmail Account"}
           </button>
         </div>
       </section>
+
+      {oauthConnecting && (
+        <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-4 text-sm font-semibold text-cyan-800">
+          Gmail authorization is in progress. Complete the Google popup to finish
+          the connection.
+        </div>
+      )}
 
       {error && (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-700">
@@ -589,7 +904,7 @@ export default function SettingsPage() {
                 key={account.id}
                 account={account}
                 isHighlighted={
-                  recentlyConnectedEmail &&
+                  Boolean(recentlyConnectedEmail) &&
                   account.account_email === recentlyConnectedEmail
                 }
                 actionLoading={actionLoading}
