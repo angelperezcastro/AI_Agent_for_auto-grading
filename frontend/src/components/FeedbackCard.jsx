@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  getCriteriaForDeliverable,
   getCriterionMaxPoints,
   inferDeliverableNumberFromCriteria,
+  normalizeCriterionName,
 } from "../data/deliverables";
 
 const SCORE_RING_RADIUS = 44;
@@ -135,17 +137,68 @@ function getScoreTone(score) {
   };
 }
 
-function buildCriteriaRows(criteriaEntries, deliverableNumber) {
-  const fallbackMaxPoints =
-    criteriaEntries.length > 0 ? Math.round(100 / criteriaEntries.length) : 100;
+function resolveCriterionMaxPoints(criterionName, deliverableNumber, rawValue) {
+  /*
+    Robust max-point resolution:
+    1. First, try an exact rubric match inside the inferred/explicit deliverable.
+    2. Then, use the shared getCriterionMaxPoints helper.
+    3. If the backend returns an unknown criterion, fall back to max(raw score, 100)
+       so the UI never breaks and the progress bar remains bounded.
+  */
 
+  if (deliverableNumber !== null && deliverableNumber !== undefined) {
+    const deliverableCriteria = getCriteriaForDeliverable(deliverableNumber);
+    const normalizedCriterionName = normalizeCriterionName(criterionName);
+
+    const exactCriterion = deliverableCriteria.find(
+      (criterion) =>
+        normalizeCriterionName(criterion.name) === normalizedCriterionName
+    );
+
+    if (
+      exactCriterion?.maxPoints !== null &&
+      exactCriterion?.maxPoints !== undefined
+    ) {
+      return {
+        maxPoints: Number(exactCriterion.maxPoints),
+        hasKnownMaxPoints: true,
+      };
+    }
+  }
+
+  const helperMaxPoints = getCriterionMaxPoints(
+    criterionName,
+    deliverableNumber
+  );
+
+  if (
+    Number.isFinite(Number(helperMaxPoints)) &&
+    Number(helperMaxPoints) > 0 &&
+    Number(helperMaxPoints) !== 100
+  ) {
+    return {
+      maxPoints: Number(helperMaxPoints),
+      hasKnownMaxPoints: true,
+    };
+  }
+
+  const safeRawValue = Number.isFinite(Number(rawValue)) ? Number(rawValue) : 0;
+
+  return {
+    maxPoints: Math.max(100, safeRawValue, 1),
+    hasKnownMaxPoints: false,
+  };
+}
+
+function buildCriteriaRows(criteriaEntries, deliverableNumber) {
   return criteriaEntries.map((criterion) => {
     const rawValue = Number.isFinite(criterion.value) ? criterion.value : 0;
-    const rubricMaxPoints = getCriterionMaxPoints(
+    const { maxPoints, hasKnownMaxPoints } = resolveCriterionMaxPoints(
       criterion.name,
-      deliverableNumber
+      deliverableNumber,
+      rawValue
     );
-    const maxPoints = rubricMaxPoints || Math.max(fallbackMaxPoints, rawValue, 1);
+
     const safeScore = clampNumber(rawValue, 0, maxPoints);
     const progressPercentage = clampNumber((safeScore / maxPoints) * 100, 0, 100);
 
@@ -155,7 +208,7 @@ function buildCriteriaRows(criteriaEntries, deliverableNumber) {
       safeScore,
       maxPoints,
       progressPercentage,
-      hasKnownMaxPoints: Boolean(rubricMaxPoints),
+      hasKnownMaxPoints,
     };
   });
 }
@@ -243,6 +296,97 @@ function ScoreRing({ score, isOverridden }) {
   );
 }
 
+function CriteriaProgressBars({ criteriaRows, mounted, scoreTone }) {
+  if (criteriaRows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h4 className="text-sm font-bold uppercase tracking-wide text-slate-500">
+            Criteria breakdown
+          </h4>
+
+          <p className="mt-1 text-sm text-slate-500">
+            Each bar shows the score obtained for that criterion.
+          </p>
+        </div>
+
+        <span className="text-xs font-semibold text-slate-400">
+          {criteriaRows.length} criteria evaluated
+        </span>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {criteriaRows.map((criterion, index) => (
+          <article
+            key={`${criterion.name}-${index}`}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <h5 className="break-words text-sm font-black text-slate-900">
+                  {criterion.name}
+                </h5>
+
+                {!criterion.hasKnownMaxPoints && (
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    Rubric maximum not detected. Progress is displayed against a
+                    safe 100-point scale.
+                  </p>
+                )}
+              </div>
+
+              <span
+                className={`w-fit shrink-0 rounded-full px-3 py-1 text-xs font-black ring-1 ${scoreTone.badge}`}
+              >
+                {criterion.hasKnownMaxPoints
+                  ? `${criterion.safeScore}/${criterion.maxPoints}`
+                  : `${criterion.safeScore}`}
+              </span>
+            </div>
+
+            <div className="mt-4">
+              <div
+                className="h-3 overflow-hidden rounded-full bg-slate-100"
+                role="progressbar"
+                aria-label={`${criterion.name}: ${criterion.safeScore} out of ${criterion.maxPoints}`}
+                aria-valuemin={0}
+                aria-valuemax={criterion.maxPoints}
+                aria-valuenow={criterion.safeScore}
+              >
+                <div
+                  className={`h-full rounded-full motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-out motion-reduce:transition-none ${scoreTone.bar}`}
+                  style={{
+                    width: mounted ? `${criterion.progressPercentage}%` : "0%",
+                    transitionDelay: `${Math.min(index * 80, 320)}ms`,
+                  }}
+                />
+              </div>
+
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-slate-400">
+                  0
+                </span>
+
+                <span className="text-xs font-black text-slate-500">
+                  {Math.round(criterion.progressPercentage)}%
+                </span>
+
+                <span className="text-xs font-semibold text-slate-400">
+                  {criterion.maxPoints}
+                </span>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function FeedbackCard({ evaluation }) {
   const [mounted, setMounted] = useState(false);
 
@@ -285,9 +429,7 @@ export default function FeedbackCard({ evaluation }) {
     <section
       className={[
         "mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition md:p-6",
-        mounted
-          ? "opacity-100 translate-y-0"
-          : "opacity-0 translate-y-3",
+        mounted ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0",
         "motion-safe:duration-500 motion-safe:ease-out motion-reduce:translate-y-0 motion-reduce:opacity-100 motion-reduce:transition-none",
       ].join(" ")}
       aria-label="AI evaluation feedback"
@@ -336,72 +478,16 @@ export default function FeedbackCard({ evaluation }) {
           )}
         </div>
 
-        <div
-          className={`rounded-3xl border p-4 ${scoreTone.panel}`}
-        >
+        <div className={`rounded-3xl border p-4 ${scoreTone.panel}`}>
           <ScoreRing score={finalScore} isOverridden={isOverridden} />
         </div>
       </div>
 
-      {criteriaRows.length > 0 && (
-        <div className="mt-6">
-          <h4 className="text-sm font-bold uppercase tracking-wide text-slate-500">
-            Criteria breakdown
-          </h4>
-
-          <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] border-collapse bg-white text-sm">
-                <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 font-bold">Criterion</th>
-                    <th className="w-36 px-4 py-3 font-bold">Score</th>
-                    <th className="w-56 px-4 py-3 font-bold">Progress</th>
-                  </tr>
-                </thead>
-
-                <tbody className="divide-y divide-slate-100">
-                  {criteriaRows.map((criterion) => (
-                    <tr key={criterion.name}>
-                      <td className="px-4 py-4 font-medium text-slate-800">
-                        {criterion.name}
-                      </td>
-
-                      <td className="px-4 py-4 font-bold text-slate-700">
-                        {criterion.hasKnownMaxPoints
-                          ? `${criterion.safeScore}/${criterion.maxPoints}`
-                          : criterion.safeScore}
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"
-                            aria-hidden="true"
-                          >
-                            <div
-                              className={`h-full rounded-full motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-out motion-reduce:transition-none ${scoreTone.bar}`}
-                              style={{
-                                width: mounted
-                                  ? `${criterion.progressPercentage}%`
-                                  : "0%",
-                              }}
-                            />
-                          </div>
-
-                          <span className="w-10 text-right text-xs font-bold text-slate-500">
-                            {Math.round(criterion.progressPercentage)}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      <CriteriaProgressBars
+        criteriaRows={criteriaRows}
+        mounted={mounted}
+        scoreTone={scoreTone}
+      />
 
       {evaluation.feedback && (
         <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
