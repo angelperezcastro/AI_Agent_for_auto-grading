@@ -304,3 +304,117 @@ a {
     transform: none;
   }
 }
+@layer utilities {
+  .auth-workflow-card {
+    animation-duration: 8s;
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+    will-change: transform, opacity;
+  }
+
+  .auth-workflow-step-one {
+    animation-name: authWorkflowStepOne;
+  }
+
+  .auth-workflow-step-two {
+    animation-name: authWorkflowStepTwo;
+    animation-delay: 0.4s;
+  }
+
+  .auth-workflow-step-three {
+    animation-name: authWorkflowStepThree;
+    animation-delay: 0.8s;
+  }
+
+  .auth-workflow-step-four {
+    animation-name: authWorkflowStepFour;
+    animation-delay: 1.2s;
+  }
+
+  .auth-workflow-progress {
+    width: var(--progress-width);
+    animation: authWorkflowProgress 3.8s ease-in-out infinite;
+    transform-origin: left center;
+  }
+}
+
+@keyframes authWorkflowStepOne {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.92;
+  }
+
+  50% {
+    transform: translate3d(0, -4px, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes authWorkflowStepTwo {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.88;
+  }
+
+  50% {
+    transform: translate3d(6px, -5px, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes authWorkflowStepThree {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.9;
+  }
+
+  50% {
+    transform: translate3d(0, -6px, 0) scale(1.01);
+    opacity: 1;
+  }
+}
+
+@keyframes authWorkflowStepFour {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.88;
+  }
+
+  50% {
+    transform: translate3d(-6px, -4px, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes authWorkflowProgress {
+  0%,
+  100% {
+    transform: scaleX(0.92);
+    opacity: 0.72;
+  }
+
+  50% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-workflow-card,
+  .auth-workflow-progress {
+    animation: none !important;
+  }
+
+  .auth-workflow-card {
+    transform: none !important;
+    opacity: 1;
+  }
+
+  .auth-workflow-progress {
+    transform: none !important;
+  }
+}
