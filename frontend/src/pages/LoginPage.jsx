@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import AuthFloatingIcons from "../components/auth/AuthFloatingIcons";
 import { useAuth } from "../context/useAuth";
 import { getApiErrorMessage } from "../services/api";
 
@@ -110,6 +111,7 @@ export default function LoginPage() {
         <div className="auth-blob auth-blob-a absolute -left-24 top-10 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
         <div className="auth-blob auth-blob-b absolute right-[-7rem] top-24 h-80 w-80 rounded-full bg-indigo-500/20 blur-3xl" />
         <div className="auth-blob auth-blob-c absolute bottom-[-8rem] left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-teal-300/10 blur-3xl" />
+        <AuthFloatingIcons />
       </div>
 
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-center justify-center">
