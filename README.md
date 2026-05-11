@@ -19,13 +19,7 @@ The platform combines a real full-stack architecture with authentication, relati
 ![Main Product Screenshot](docs/screenshots/logo_se_transparent.png)
 
 <p align="center">
-  <video
-    src="docs/screenshots/video_logo.mp4"
-    autoplay
-    muted
-    playsinline
-    width="900">
-  </video>
+  <img src="docs/screenshots/video_logo.gif" width="900" alt="AI Agent for Auto-Grading visual hero demo" />
 </p>
 
 Recommended screenshot: show the deployed app with the professor dashboard or the student workspace after at least one evaluated deliverable. The strongest hero image is a wide screenshot where the evaluator score, deliverable status, and polished dashboard UI are visible.
