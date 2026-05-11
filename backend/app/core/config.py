@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
     # Gemini
     GEMINI_API_KEY: str
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_FALLBACK_MODEL: str = "gemini-2.5-flash-lite"
 
     # Encryption
     FERNET_KEY: str

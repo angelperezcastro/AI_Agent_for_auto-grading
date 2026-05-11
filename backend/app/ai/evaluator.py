@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import time
 from typing import Any, Mapping, Sequence, TypedDict
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
 from app.ai.prompts import CRITERIA_BY_DELIVERABLE, PROMPT_BUILDERS
-
-
-load_dotenv()
+from app.core.config import settings
 
 
 class EvaluationMalformedResponseError(ValueError):
@@ -27,20 +23,46 @@ class EvaluationResult(TypedDict):
 
 
 def _get_client() -> genai.Client:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = settings.GEMINI_API_KEY
 
     if not api_key or api_key.strip().lower() == "dummy":
-        raise RuntimeError("GEMINI_API_KEY is missing or invalid. Add a real key to backend/.env")
+        raise RuntimeError(
+            "GEMINI_API_KEY is missing or invalid. Add a real key to backend/.env and Railway."
+        )
 
     return genai.Client(api_key=api_key.strip())
 
 
-def _get_primary_model_name() -> str:
-    return os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
+def _get_model_attempts() -> list[str]:
+    """
+    Ordered model fallback chain.
 
+    Important:
+    - Never fall back to gemini-1.5-flash.
+    - Railway/local .env should normally provide:
+        GEMINI_MODEL=gemini-2.5-flash
+        GEMINI_FALLBACK_MODEL=gemini-2.5-flash-lite
+    """
 
-def _get_fallback_model_name() -> str:
-    return os.getenv("GEMINI_FALLBACK_MODEL", "gemini-1.5-flash").strip()
+    candidates = [
+        getattr(settings, "GEMINI_MODEL", None),
+        getattr(settings, "GEMINI_FALLBACK_MODEL", None),
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+    ]
+
+    model_attempts: list[str] = []
+
+    for model_name in candidates:
+        if not model_name:
+            continue
+
+        clean_model_name = str(model_name).strip()
+
+        if clean_model_name and clean_model_name not in model_attempts:
+            model_attempts.append(clean_model_name)
+
+    return model_attempts
 
 
 def _strip_json_fences(raw_text: str) -> str:
@@ -55,9 +77,10 @@ def _strip_json_fences(raw_text: str) -> str:
 
 def _extract_json_object(raw_text: str) -> str:
     """
-    Gemini usually returns pure JSON when response_mime_type is application/json.
+    Gemini should return pure JSON when response_mime_type is application/json.
     This fallback also handles Markdown fences or small text prefixes/suffixes.
     """
+
     text = _strip_json_fences(raw_text)
 
     if text.startswith("{") and text.endswith("}"):
@@ -68,21 +91,85 @@ def _extract_json_object(raw_text: str) -> str:
 
     if start == -1 or end == -1 or end <= start:
         raise EvaluationMalformedResponseError(
-            f"Could not find a JSON object in Gemini response. Raw response: {raw_text[:1000]}"
+            f"Could not find a JSON object in Gemini response. Raw response: {raw_text[:1500]}"
         )
 
     return text[start : end + 1]
 
 
+def _escape_control_characters_inside_strings(json_text: str) -> str:
+    """
+    Repairs a common LLM JSON issue:
+
+    {
+      "feedback": "This is a long feedback
+      with a raw newline inside the JSON string"
+    }
+
+    JSON does not allow raw control characters inside strings.
+    This converts raw newlines/tabs/etc. inside strings into escaped sequences.
+    """
+
+    result: list[str] = []
+    in_string = False
+    escaped = False
+
+    for char in json_text:
+        if escaped:
+            result.append(char)
+            escaped = False
+            continue
+
+        if char == "\\":
+            result.append(char)
+            escaped = True
+            continue
+
+        if char == '"':
+            result.append(char)
+            in_string = not in_string
+            continue
+
+        if in_string:
+            if char == "\n":
+                result.append("\\n")
+                continue
+
+            if char == "\r":
+                result.append("\\r")
+                continue
+
+            if char == "\t":
+                result.append("\\t")
+                continue
+
+            if char == "\b":
+                result.append("\\b")
+                continue
+
+            if char == "\f":
+                result.append("\\f")
+                continue
+
+        result.append(char)
+
+    return "".join(result)
+
+
 def _parse_json(raw_text: str) -> dict[str, Any]:
-    text = _extract_json_object(raw_text)
+    json_text = _extract_json_object(raw_text)
 
     try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise EvaluationMalformedResponseError(
-            f"Gemini returned invalid JSON: {exc}. Raw response: {raw_text[:1000]}"
-        ) from exc
+        parsed = json.loads(json_text)
+    except json.JSONDecodeError:
+        repaired_json_text = _escape_control_characters_inside_strings(json_text)
+
+        try:
+            parsed = json.loads(repaired_json_text)
+        except json.JSONDecodeError as exc:
+            raise EvaluationMalformedResponseError(
+                f"Gemini returned invalid JSON: {exc}. Raw response: {raw_text[:3000]}"
+            ) from exc
 
     if not isinstance(parsed, dict):
         raise EvaluationMalformedResponseError("Gemini JSON response must be an object.")
@@ -92,7 +179,9 @@ def _parse_json(raw_text: str) -> dict[str, Any]:
 
 def _coerce_int(value: Any, field_name: str) -> int:
     if isinstance(value, bool):
-        raise EvaluationMalformedResponseError(f"{field_name} must be numeric, not boolean.")
+        raise EvaluationMalformedResponseError(
+            f"{field_name} must be numeric, not boolean."
+        )
 
     if isinstance(value, int):
         return value
@@ -105,7 +194,9 @@ def _coerce_int(value: Any, field_name: str) -> int:
         if match:
             return int(round(float(match.group(0))))
 
-    raise EvaluationMalformedResponseError(f"{field_name} must be an integer-compatible value.")
+    raise EvaluationMalformedResponseError(
+        f"{field_name} must be an integer-compatible value."
+    )
 
 
 def _normalise_key(value: str) -> str:
@@ -116,7 +207,12 @@ def _distribute_score_across_criteria(
     score: int,
     expected_criteria: Mapping[str, int],
 ) -> dict[str, int]:
-    """Distribute a total score proportionally across rubric weights."""
+    """
+    Distributes a total score proportionally across rubric weights.
+
+    Used only as a repair fallback when Gemini returns missing/malformed criteria.
+    """
+
     score = max(0, min(100, score))
     total_weight = sum(expected_criteria.values()) or 100
 
@@ -135,6 +231,7 @@ def _distribute_score_across_criteria(
 
     # If clamping changed the sum, adjust from the last criterion backwards.
     diff = score - sum(distributed.values())
+
     for criterion_name, max_points in reversed(items):
         if diff == 0:
             break
@@ -184,13 +281,6 @@ def _validate_and_repair_criteria(
     if missing_any:
         return _distribute_score_across_criteria(score, expected_criteria)
 
-    criteria_sum = sum(repaired.values())
-
-    # The project rubric expects the total score to equal the criteria sum.
-    # If Gemini returns a close but inconsistent total, trust the criterion breakdown.
-    if criteria_sum != score:
-        return repaired
-
     return repaired
 
 
@@ -211,6 +301,7 @@ def _validate_result(
     )
 
     # Store a coherent score that matches the stored rubric breakdown.
+    # Your rubric weights sum to 100, so this keeps score and criteria aligned.
     score = max(0, min(100, sum(criteria.values())))
 
     feedback = parsed.get("feedback", "")
@@ -239,7 +330,7 @@ def _build_final_prompt(
     expected_criteria: Mapping[str, int],
 ) -> str:
     criteria_lines = "\n".join(
-        f'- "{criterion_name}": integer from 0 to {max_points}'
+        f'    "{criterion_name}": integer from 0 to {max_points}'
         for criterion_name, max_points in expected_criteria.items()
     )
 
@@ -247,20 +338,29 @@ def _build_final_prompt(
 {base_prompt}
 
 STRICT OUTPUT CONTRACT:
-Return ONLY one valid JSON object. Do not use Markdown fences. Do not add commentary outside JSON.
+Return ONLY one valid JSON object.
+Do not use Markdown fences.
+Do not add commentary outside JSON.
+Do not include trailing commas.
+Do not include comments.
+Do not insert raw line breaks inside JSON string values.
+If a line break is needed inside feedback, encode it as \\n.
+
 The JSON object must have exactly this structure:
 {{
   "score": integer from 0 to 100,
   "criteria": {{
 {criteria_lines}
   }},
-  "feedback": "detailed constructive feedback"
+  "feedback": "detailed constructive feedback as one valid JSON string"
 }}
 
 Rules:
 - The score must equal the sum of all criteria values.
 - The criteria keys must use the exact names shown above.
-- Feedback should be specific, constructive, and refer to the student's actual submission.
+- Each criterion value must be an integer.
+- Feedback must be specific, constructive, detailed, and refer to the student's actual submission.
+- Feedback must be valid JSON string content: escape quotes and newlines properly.
 """.strip()
 
 
@@ -275,17 +375,16 @@ def _generate_once(
         config=types.GenerateContentConfig(
             temperature=0.1,
             top_p=0.8,
-            max_output_tokens=4096,
+            max_output_tokens=8192,
             response_mime_type="application/json",
         ),
     )
 
     raw_text = getattr(response, "text", None)
 
-    if raw_text:
-        return raw_text
+    if isinstance(raw_text, str) and raw_text.strip():
+        return raw_text.strip()
 
-    # Some SDK versions expose candidates even when .text is empty.
     candidates = getattr(response, "candidates", None)
     if candidates:
         raise EvaluationMalformedResponseError(
@@ -297,28 +396,42 @@ def _generate_once(
     )
 
 
-def _generate_json_with_gemini(prompt: str) -> str:
+def _generate_valid_result_with_gemini(
+    prompt: str,
+    expected_criteria: Mapping[str, int],
+) -> EvaluationResult:
     client = _get_client()
+    model_attempts = _get_model_attempts()
 
-    model_attempts = []
-    for model_name in [_get_primary_model_name(), _get_fallback_model_name()]:
-        if model_name and model_name not in model_attempts:
-            model_attempts.append(model_name)
+    if not model_attempts:
+        raise RuntimeError(
+            "No Gemini models configured. Set GEMINI_MODEL and GEMINI_FALLBACK_MODEL."
+        )
 
     last_error: Exception | None = None
 
     for model_name in model_attempts:
         for attempt in range(1, 4):
             try:
-                return _generate_once(
+                raw_text = _generate_once(
                     client=client,
                     model_name=model_name,
                     prompt=prompt,
                 )
+
+                parsed = _parse_json(raw_text)
+
+                return _validate_result(
+                    parsed=parsed,
+                    expected_criteria=expected_criteria,
+                )
+
             except Exception as exc:
                 last_error = exc
                 print(
-                    f"[Gemini evaluator] Attempt {attempt}/3 failed with model {model_name}: {type(exc).__name__}: {exc}"
+                    "[Gemini evaluator] "
+                    f"Attempt {attempt}/3 failed with model {model_name}: "
+                    f"{type(exc).__name__}: {exc}"
                 )
 
                 if attempt < 3:
@@ -327,7 +440,8 @@ def _generate_json_with_gemini(prompt: str) -> str:
         print(f"[Gemini evaluator] Falling back from {model_name} to next model.")
 
     raise RuntimeError(
-        f"Gemini evaluation failed after all model attempts. Last error: {type(last_error).__name__}: {last_error}"
+        "Gemini evaluation failed after all model attempts. "
+        f"Last error: {type(last_error).__name__}: {last_error}"
     )
 
 
@@ -360,11 +474,8 @@ def _run_evaluation(
         expected_criteria=expected_criteria,
     )
 
-    raw_text = _generate_json_with_gemini(prompt=prompt)
-    parsed = _parse_json(raw_text)
-
-    return _validate_result(
-        parsed=parsed,
+    return _generate_valid_result_with_gemini(
+        prompt=prompt,
         expected_criteria=expected_criteria,
     )
 
