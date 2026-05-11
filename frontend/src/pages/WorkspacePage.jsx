@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import FeedbackCard from "../components/FeedbackCard";
 import Navbar from "../components/Navbar";
 import SubmissionForm from "../components/SubmissionForm";
+import ProgressBar from "../components/ui/ProgressBar";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
 import { formatDateTime, getDeadlineCountdown } from "../utils/dates";
@@ -483,15 +484,17 @@ export default function WorkspacePage() {
 
             <div className="rounded-2xl bg-white/10 p-5">
               <p className="text-sm text-slate-300">Graded progress</p>
+
               <p className="mt-1 text-3xl font-black">
                 {progress.gradedCount}/4
               </p>
-              <div className="mt-3 h-2 w-48 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-cyan-300"
-                  style={{ width: `${progress.percentage}%` }}
-                />
-              </div>
+
+              <ProgressBar
+                currentStep={currentOpenDeliverable || progress.gradedCount}
+                totalSteps={4}
+                status={`${progress.gradedCount}/4 graded`}
+                className="mt-3 w-56 [&_p]:text-slate-200 [&_span]:text-slate-300 [&_[role=progressbar]]:bg-white/10"
+              />
             </div>
           </div>
         </section>

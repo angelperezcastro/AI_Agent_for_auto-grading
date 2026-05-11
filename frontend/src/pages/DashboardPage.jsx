@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import ProgressBar from "../components/ui/ProgressBar";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
 import { formatDateTime, getDeadlineCountdown } from "../utils/dates";
@@ -290,7 +291,6 @@ function EnrollmentCard({ enrollment, index }) {
   const metrics = enrollment.metrics;
   const countdown = getDeadlineCountdown(metrics.nextDeadline);
 
-  const progressPercentage = Math.round((metrics.evaluatedCount / 4) * 100);
   const deliverableMeta =
     DELIVERABLES.find(
       (deliverable) => deliverable.number === metrics.currentDeliverable
@@ -343,21 +343,11 @@ function EnrollmentCard({ enrollment, index }) {
       </div>
 
       <div className="mt-6">
-        <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="font-semibold text-slate-700">
-            Step {metrics.currentDeliverable} of 4
-          </span>
-          <span className="font-semibold text-slate-500">
-            {metrics.evaluatedCount}/4 graded
-          </span>
-        </div>
-
-        <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-          <div
-            className="h-full rounded-full bg-cyan-500 transition-all"
-            style={{ width: `${progressPercentage}%` }}
-          />
-        </div>
+        <ProgressBar
+          currentStep={metrics.currentDeliverable}
+          totalSteps={4}
+          status={`${metrics.evaluatedCount}/4 graded`}
+        />
 
         <p className="mt-3 text-sm text-slate-500">
           Current deliverable:{" "}
