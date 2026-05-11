@@ -247,6 +247,12 @@ function getStatusBadgeClass(status) {
   return "bg-cyan-50 text-cyan-700";
 }
 
+function getStaggerStyle(index) {
+  return {
+    "--dashboard-card-delay": `${Math.min(index * 65, 360)}ms`,
+  };
+}
+
 function DashboardSkeleton() {
   return (
     <div className="grid gap-5 md:grid-cols-2">
@@ -266,7 +272,19 @@ function DashboardSkeleton() {
   );
 }
 
-function EnrollmentCard({ enrollment }) {
+function MetricCard({ title, value, index }) {
+  return (
+    <div
+      className="dashboard-card-enter rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+      style={getStaggerStyle(index)}
+    >
+      <p className="text-sm font-semibold text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-black text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function EnrollmentCard({ enrollment, index }) {
   const navigate = useNavigate();
 
   const metrics = enrollment.metrics;
@@ -297,7 +315,8 @@ function EnrollmentCard({ enrollment }) {
           openWorkspace();
         }
       }}
-      className="group cursor-pointer rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-cyan-100"
+      style={getStaggerStyle(index)}
+      className="dashboard-card-enter group cursor-pointer rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-cyan-100"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -398,7 +417,7 @@ function EnrollmentCard({ enrollment }) {
           </span>
         </p>
 
-        <span className="text-sm font-bold text-cyan-700 group-hover:translate-x-1 transition">
+        <span className="text-sm font-bold text-cyan-700 transition group-hover:translate-x-1">
           Open →
         </span>
       </div>
@@ -585,34 +604,27 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="mb-8 grid gap-4 md:grid-cols-3">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-slate-500">
-              Active enrollments
-            </p>
-            <p className="mt-2 text-3xl font-black text-slate-900">
-              {activeCount}
-            </p>
-          </div>
+        {!loading && !error && (
+          <section className="mb-8 grid gap-4 md:grid-cols-3">
+            <MetricCard
+              title="Active enrollments"
+              value={activeCount}
+              index={0}
+            />
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-slate-500">
-              Average latest score
-            </p>
-            <p className="mt-2 text-3xl font-black text-slate-900">
-              {averageScore !== null ? `${averageScore}/100` : "—"}
-            </p>
-          </div>
+            <MetricCard
+              title="Average latest score"
+              value={averageScore !== null ? `${averageScore}/100` : "—"}
+              index={1}
+            />
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-slate-500">
-              Total projects
-            </p>
-            <p className="mt-2 text-3xl font-black text-slate-900">
-              {enrollments.length}
-            </p>
-          </div>
-        </section>
+            <MetricCard
+              title="Total projects"
+              value={enrollments.length}
+              index={2}
+            />
+          </section>
+        )}
 
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -671,8 +683,12 @@ export default function DashboardPage() {
 
         {!loading && !error && enrollments.length > 0 && (
           <div className="grid gap-5 md:grid-cols-2">
-            {enrollments.map((enrollment) => (
-              <EnrollmentCard key={enrollment.id} enrollment={enrollment} />
+            {enrollments.map((enrollment, index) => (
+              <EnrollmentCard
+                key={enrollment.id}
+                enrollment={enrollment}
+                index={index + 3}
+              />
             ))}
           </div>
         )}
