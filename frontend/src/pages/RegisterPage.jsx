@@ -8,6 +8,142 @@ import { getApiErrorMessage } from "../services/api";
 const inputClassName =
   "w-full rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-white placeholder:text-slate-400 shadow-inner shadow-slate-950/20 outline-none transition duration-200 focus:border-cyan-300 focus:bg-white/[0.13] focus:ring-4 focus:ring-cyan-300/20 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-slate-400";
 
+const roleOptions = [
+  {
+    value: "student",
+    label: "Student",
+    description: "Submit deliverables, track progress, and receive AI feedback.",
+  },
+  {
+    value: "professor",
+    label: "Professor",
+    description: "Manage subjects, supervise progress, and override scores.",
+  },
+];
+
+function RoleIcon({ role }) {
+  if (role === "professor") {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-5 w-5"
+      >
+        <path d="M22 10 12 5 2 10l10 5z" />
+        <path d="M6 12v5c2 2 10 2 12 0v-5" />
+        <path d="M22 10v6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+    >
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z" />
+      <path d="M14 2v5h5" />
+      <path d="M9 13h6" />
+      <path d="M9 17h4" />
+    </svg>
+  );
+}
+
+function RoleCard({ option, selected, disabled, onChange }) {
+  return (
+    <label className={disabled ? "cursor-not-allowed" : "cursor-pointer"}>
+      <input
+        type="radio"
+        name="role"
+        value={option.value}
+        checked={selected}
+        onChange={onChange}
+        disabled={disabled}
+        className="peer sr-only"
+      />
+
+      <div
+        className={[
+          "relative h-full overflow-hidden rounded-2xl border p-4 shadow-lg outline-none transition-all duration-300 ease-out",
+          "peer-focus-visible:ring-4 peer-focus-visible:ring-cyan-300/30",
+          disabled
+            ? "cursor-not-allowed opacity-60"
+            : "hover:-translate-y-0.5 hover:border-cyan-200/40 hover:bg-white/[0.09]",
+          selected
+            ? "scale-[1.015] border-cyan-300/60 bg-gradient-to-br from-cyan-300/18 via-sky-400/10 to-emerald-300/10 shadow-cyan-950/35"
+            : "border-white/15 bg-white/[0.055] shadow-slate-950/20",
+        ].join(" ")}
+      >
+        <span
+          aria-hidden="true"
+          className={[
+            "pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r transition-opacity duration-300",
+            selected
+              ? "from-transparent via-cyan-200/80 to-transparent opacity-100"
+              : "from-transparent via-white/20 to-transparent opacity-40",
+          ].join(" ")}
+        />
+
+        <div className="flex items-start gap-3">
+          <div
+            className={[
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all duration-300",
+              selected
+                ? "border-cyan-200/50 bg-cyan-300/20 text-cyan-100 shadow-lg shadow-cyan-950/25"
+                : "border-white/10 bg-slate-950/45 text-slate-300",
+            ].join(" ")}
+          >
+            <RoleIcon role={option.value} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-semibold text-white">{option.label}</p>
+
+              <span
+                className={[
+                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-all duration-300",
+                  selected
+                    ? "border-cyan-200 bg-cyan-300 text-slate-950"
+                    : "border-white/20 bg-white/[0.04] text-transparent",
+                ].join(" ")}
+              >
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-3 w-3"
+                >
+                  <path d="m5 12 4 4L19 6" />
+                </svg>
+              </span>
+            </div>
+
+            <p className="mt-1 text-sm leading-6 text-slate-400">
+              {option.description}
+            </p>
+          </div>
+        </div>
+      </div>
+    </label>
+  );
+}
+
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -153,26 +289,23 @@ export default function RegisterPage() {
                 />
               </div>
 
-              <div>
-                <label
-                  htmlFor="role"
-                  className="mb-2 block text-sm font-medium text-slate-200"
-                >
+              <fieldset>
+                <legend className="mb-2 block text-sm font-medium text-slate-200">
                   Role
-                </label>
+                </legend>
 
-                <select
-                  id="role"
-                  name="role"
-                  value={form.role}
-                  onChange={updateField}
-                  disabled={loading}
-                  className="w-full rounded-2xl border border-white/15 bg-slate-900/80 px-4 py-3 text-white shadow-inner shadow-slate-950/20 outline-none transition duration-200 focus:border-cyan-300 focus:bg-slate-900 focus:ring-4 focus:ring-cyan-300/20 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-white/[0.06] disabled:text-slate-400"
-                >
-                  <option value="student">Student</option>
-                  <option value="professor">Professor</option>
-                </select>
-              </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {roleOptions.map((option) => (
+                    <RoleCard
+                      key={option.value}
+                      option={option}
+                      selected={form.role === option.value}
+                      disabled={loading}
+                      onChange={updateField}
+                    />
+                  ))}
+                </div>
+              </fieldset>
 
               <button
                 type="submit"
