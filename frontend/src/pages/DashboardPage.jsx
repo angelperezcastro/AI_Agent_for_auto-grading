@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import DeadlineBadge from "../components/ui/DeadlineBadge";
 import EmptyState from "../components/ui/EmptyState";
 import ProgressBar from "../components/ui/ProgressBar";
+import { CardSkeleton } from "../components/ui/Skeletons";
 import StatusBadge from "../components/ui/StatusBadge";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
@@ -90,7 +91,6 @@ function computeEnrollmentMetrics(enrollment, submissions) {
     Boolean(getEvaluation(submission))
   );
 
-  const submittedCount = sortedSubmissions.length;
   const evaluatedCount = evaluatedSubmissions.length;
 
   let latestScore =
@@ -109,8 +109,7 @@ function computeEnrollmentMetrics(enrollment, submissions) {
       latestSubmissionAt = submission.submitted_at;
     }
 
-    const evaluation = getEvaluation(submission);
-    const score = getFinalScore(evaluation);
+    const score = getFinalScore(getEvaluation(submission));
 
     if (score !== null && score !== undefined) {
       latestScore = score;
@@ -155,17 +154,14 @@ function computeEnrollmentMetrics(enrollment, submissions) {
     }
   }
 
-  const isComplete = evaluatedCount >= 4;
-
   return {
-    submittedCount,
     evaluatedCount,
     latestScore,
     latestSubmissionAt,
     currentDeliverable,
     nextDeadline,
     deadlineSource,
-    isComplete,
+    isComplete: evaluatedCount >= 4,
   };
 }
 
@@ -207,19 +203,19 @@ function getStaggerStyle(index) {
 
 function DashboardSkeleton() {
   return (
-    <div className="grid gap-5 md:grid-cols-2">
-      {[1, 2, 3, 4].map((item) => (
-        <div
-          key={item}
-          className="h-64 animate-pulse rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <div className="h-5 w-2/3 rounded bg-slate-100" />
-          <div className="mt-4 h-4 w-1/2 rounded bg-slate-100" />
-          <div className="mt-8 h-3 w-full rounded bg-slate-100" />
-          <div className="mt-3 h-3 w-5/6 rounded bg-slate-100" />
-          <div className="mt-8 h-10 w-full rounded-2xl bg-slate-100" />
-        </div>
-      ))}
+    <div className="space-y-8">
+      <section className="grid gap-4 md:grid-cols-3">
+        <CardSkeleton dense />
+        <CardSkeleton dense />
+        <CardSkeleton dense />
+      </section>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <CardSkeleton />
+        <CardSkeleton />
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
     </div>
   );
 }
@@ -533,28 +529,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {!loading && !error && (
-          <section className="mb-8 grid gap-4 md:grid-cols-3">
-            <MetricCard
-              title="Active enrollments"
-              value={activeCount}
-              index={0}
-            />
-
-            <MetricCard
-              title="Average latest score"
-              value={averageScore !== null ? `${averageScore}/100` : "—"}
-              index={1}
-            />
-
-            <MetricCard
-              title="Total projects"
-              value={enrollments.length}
-              index={2}
-            />
-          </section>
-        )}
-
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-black text-slate-900">My projects</h2>
@@ -583,6 +557,28 @@ export default function DashboardPage() {
         </div>
 
         {loading && <DashboardSkeleton />}
+
+        {!loading && !error && (
+          <section className="mb-8 grid gap-4 md:grid-cols-3">
+            <MetricCard
+              title="Active enrollments"
+              value={activeCount}
+              index={0}
+            />
+
+            <MetricCard
+              title="Average latest score"
+              value={averageScore !== null ? `${averageScore}/100` : "—"}
+              index={1}
+            />
+
+            <MetricCard
+              title="Total projects"
+              value={enrollments.length}
+              index={2}
+            />
+          </section>
+        )}
 
         {!loading && error && (
           <div className="rounded-3xl border border-red-200 bg-red-50 p-8 text-sm text-red-700">

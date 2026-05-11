@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { CardSkeleton, TableSkeleton } from "../../components/ui/Skeletons";
 import StatusBadge from "../../components/ui/StatusBadge";
 import {
   getProfessorDashboardEnrollments,
@@ -94,98 +95,25 @@ function ProgressCell({ row }) {
   );
 }
 
-function MobileEnrollmentCard({ row, onOpen }) {
+function ProfessorDashboardSkeleton() {
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(row)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen(row);
-        }
-      }}
-      className="group cursor-pointer rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-cyan-200 hover:bg-cyan-50/30 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-cyan-100"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-            Student
-          </p>
+    <div className="space-y-8">
+      <section className="rounded-3xl bg-slate-900 p-8 text-white shadow-sm">
+        <div className="h-4 w-44 rounded bg-white/10 motion-safe:animate-pulse motion-reduce:animate-none" />
+        <div className="mt-4 h-9 w-72 rounded bg-white/10 motion-safe:animate-pulse motion-reduce:animate-none" />
+        <div className="mt-4 h-4 max-w-3xl rounded bg-white/10 motion-safe:animate-pulse motion-reduce:animate-none" />
+      </section>
 
-          <h3 className="mt-1 truncate text-base font-black text-slate-900">
-            {row.student_name}
-          </h3>
+      <section className="grid gap-4 md:grid-cols-4">
+        <CardSkeleton dense />
+        <CardSkeleton dense />
+        <CardSkeleton dense />
+        <CardSkeleton dense />
+      </section>
 
-          <p className="mt-1 truncate text-sm font-medium text-slate-500">
-            {row.student_email}
-          </p>
-        </div>
-
-        <StatusBadge status={row.status || "active"} size="sm" />
-      </div>
-
-      <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-          Project
-        </p>
-
-        <p className="mt-1 font-black text-slate-900">{row.project_name}</p>
-        <p className="mt-1 text-sm font-medium text-slate-500">
-          {row.subject_name}
-        </p>
-      </div>
-
-      <div className="mt-5">
-        <ProgressCell row={row} />
-      </div>
-
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl bg-slate-50 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
-            Score
-          </p>
-          <div className="mt-2">
-            <ScoreBadge score={row.latest_score} />
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
-            Email
-          </p>
-          <div className="mt-2">
-            <EmailStatusBadge
-              failed={row.email_failed}
-              text={row.email_status_text}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
-            Last activity
-          </p>
-          <p className="mt-2 text-sm font-semibold text-slate-700">
-            {formatDate(row.last_activity)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4">
-        <span className="text-xs font-bold uppercase tracking-wide text-slate-400">
-          Open detail
-        </span>
-
-        <span
-          aria-hidden="true"
-          className="text-sm font-black text-cyan-700 transition group-hover:translate-x-1"
-        >
-          →
-        </span>
-      </div>
-    </article>
+      <CardSkeleton dense />
+      <TableSkeleton columns={7} rows={6} />
+    </div>
   );
 }
 
@@ -313,11 +241,7 @@ export default function ProfessorDashboard() {
   }
 
   if (loading) {
-    return (
-      <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-slate-600">Loading professor dashboard...</p>
-      </div>
-    );
+    return <ProfessorDashboardSkeleton />;
   }
 
   return (
@@ -471,139 +395,106 @@ export default function ProfessorDashboard() {
             </p>
           </div>
         ) : (
-          <>
-            <div className="grid gap-4 bg-slate-50/70 p-4 lg:hidden">
-              {filteredRows.map((row) => (
-                <MobileEnrollmentCard
-                  key={row.enrollment_id}
-                  row={row}
-                  onOpen={openStudentDetail}
-                />
-              ))}
-            </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-separate border-spacing-0">
+              <caption className="sr-only">
+                Professor dashboard enrollments table
+              </caption>
 
-            <div className="hidden overflow-x-auto lg:block">
-              <table className="min-w-full border-separate border-spacing-0">
-                <caption className="sr-only">
-                  Professor dashboard enrollments table
-                </caption>
+              <thead>
+                <tr className="bg-slate-50">
+                  <th className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    Student
+                  </th>
+                  <th className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    Project
+                  </th>
+                  <th className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    Progress
+                  </th>
+                  <th className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    Latest Score
+                  </th>
+                  <th className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    Last Activity
+                  </th>
+                  <th className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    Email Status
+                  </th>
+                  <th className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    Status
+                  </th>
+                </tr>
+              </thead>
 
-                <thead>
-                  <tr className="bg-slate-50">
-                    <th
-                      scope="col"
-                      className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500"
-                    >
-                      Student
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500"
-                    >
-                      Project
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500"
-                    >
-                      Progress
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500"
-                    >
-                      Latest Score
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500"
-                    >
-                      Last Activity
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500"
-                    >
-                      Email Status
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-b border-slate-200 px-6 py-4 text-left text-xs font-black uppercase tracking-[0.16em] text-slate-500"
-                    >
-                      Status
-                    </th>
-                  </tr>
-                </thead>
-
-                <tbody className="bg-white">
-                  {filteredRows.map((row) => (
-                    <tr
-                      key={row.enrollment_id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openStudentDetail(row)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          openStudentDetail(row);
-                        }
-                      }}
-                      className="group cursor-pointer outline-none transition duration-200 hover:bg-cyan-50/40 focus:bg-cyan-50/50"
-                    >
-                      <td className="border-b border-slate-100 border-l-4 border-l-transparent px-6 py-5 align-middle transition-colors group-hover:border-l-cyan-500 group-focus:border-l-cyan-600">
-                        <div className="max-w-56">
-                          <p className="truncate font-black text-slate-900">
-                            {row.student_name}
-                          </p>
-
-                          <p className="mt-1 truncate text-sm font-medium text-slate-500">
-                            {row.student_email}
-                          </p>
-                        </div>
-                      </td>
-
-                      <td className="border-b border-slate-100 px-6 py-5 align-middle">
-                        <div className="max-w-64">
-                          <p className="truncate font-black text-slate-900">
-                            {row.project_name}
-                          </p>
-
-                          <p className="mt-1 truncate text-sm font-medium text-slate-500">
-                            {row.subject_name}
-                          </p>
-                        </div>
-                      </td>
-
-                      <td className="border-b border-slate-100 px-6 py-5 align-middle">
-                        <ProgressCell row={row} />
-                      </td>
-
-                      <td className="border-b border-slate-100 px-6 py-5 align-middle">
-                        <ScoreBadge score={row.latest_score} />
-                      </td>
-
-                      <td className="border-b border-slate-100 px-6 py-5 align-middle">
-                        <p className="whitespace-nowrap text-sm font-semibold text-slate-600">
-                          {formatDate(row.last_activity)}
+              <tbody className="bg-white">
+                {filteredRows.map((row) => (
+                  <tr
+                    key={row.enrollment_id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => openStudentDetail(row)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openStudentDetail(row);
+                      }
+                    }}
+                    className="group cursor-pointer outline-none transition duration-200 hover:bg-cyan-50/40 focus:bg-cyan-50/50"
+                  >
+                    <td className="border-b border-slate-100 border-l-4 border-l-transparent px-6 py-5 align-middle transition-colors group-hover:border-l-cyan-500 group-focus:border-l-cyan-600">
+                      <div className="max-w-56">
+                        <p className="truncate font-black text-slate-900">
+                          {row.student_name}
                         </p>
-                      </td>
 
-                      <td className="border-b border-slate-100 px-6 py-5 align-middle">
-                        <EmailStatusBadge
-                          failed={row.email_failed}
-                          text={row.email_status_text}
-                        />
-                      </td>
+                        <p className="mt-1 truncate text-sm font-medium text-slate-500">
+                          {row.student_email}
+                        </p>
+                      </div>
+                    </td>
 
-                      <td className="border-b border-slate-100 px-6 py-5 align-middle">
-                        <StatusBadge status={row.status || "active"} size="sm" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
+                    <td className="border-b border-slate-100 px-6 py-5 align-middle">
+                      <div className="max-w-64">
+                        <p className="truncate font-black text-slate-900">
+                          {row.project_name}
+                        </p>
+
+                        <p className="mt-1 truncate text-sm font-medium text-slate-500">
+                          {row.subject_name}
+                        </p>
+                      </div>
+                    </td>
+
+                    <td className="border-b border-slate-100 px-6 py-5 align-middle">
+                      <ProgressCell row={row} />
+                    </td>
+
+                    <td className="border-b border-slate-100 px-6 py-5 align-middle">
+                      <ScoreBadge score={row.latest_score} />
+                    </td>
+
+                    <td className="border-b border-slate-100 px-6 py-5 align-middle">
+                      <p className="whitespace-nowrap text-sm font-semibold text-slate-600">
+                        {formatDate(row.last_activity)}
+                      </p>
+                    </td>
+
+                    <td className="border-b border-slate-100 px-6 py-5 align-middle">
+                      <EmailStatusBadge
+                        failed={row.email_failed}
+                        text={row.email_status_text}
+                      />
+                    </td>
+
+                    <td className="border-b border-slate-100 px-6 py-5 align-middle">
+                      <StatusBadge status={row.status || "active"} size="sm" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

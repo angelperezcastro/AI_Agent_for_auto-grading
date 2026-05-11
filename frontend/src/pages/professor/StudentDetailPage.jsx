@@ -1,28 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import EmptyState from "../../components/ui/EmptyState";
+import { CardSkeleton, FeedbackSkeleton, TableSkeleton } from "../../components/ui/Skeletons";
 import {
   getProfessorEnrollmentDetail,
   overrideEvaluation,
 } from "../../services/professorWeek5Api";
 
 const DELIVERABLES = [
-  {
-    number: 1,
-    name: "Research + Motivation Letter",
-  },
-  {
-    number: 2,
-    name: "User Requirements List",
-  },
-  {
-    number: 3,
-    name: "Target Group Questions",
-  },
-  {
-    number: 4,
-    name: "Updated Requirements List",
-  },
+  { number: 1, name: "Research + Motivation Letter" },
+  { number: 2, name: "User Requirements List" },
+  { number: 3, name: "Target Group Questions" },
+  { number: 4, name: "Updated Requirements List" },
 ];
 
 function formatDate(value) {
@@ -43,13 +32,8 @@ function formatDate(value) {
 function normalizeEmailType(type) {
   const value = String(type || "");
 
-  if (value === "professor_notification") {
-    return "Professor notification";
-  }
-
-  if (value === "override_feedback") {
-    return "Override feedback";
-  }
+  if (value === "professor_notification") return "Professor notification";
+  if (value === "override_feedback") return "Override feedback";
 
   return value
     .split("_")
@@ -511,6 +495,22 @@ function DeliverableCard({ deliverable, onRefresh }) {
   );
 }
 
+function StudentDetailSkeleton() {
+  return (
+    <div className="space-y-8">
+      <section className="rounded-3xl bg-slate-900 p-8 text-white shadow-sm">
+        <div className="h-4 w-40 rounded bg-white/10 motion-safe:animate-pulse motion-reduce:animate-none" />
+        <div className="mt-6 h-9 w-72 rounded bg-white/10 motion-safe:animate-pulse motion-reduce:animate-none" />
+        <div className="mt-4 h-4 w-56 rounded bg-white/10 motion-safe:animate-pulse motion-reduce:animate-none" />
+      </section>
+
+      <CardSkeleton />
+      <FeedbackSkeleton />
+      <TableSkeleton columns={5} rows={3} />
+    </div>
+  );
+}
+
 export default function StudentDetailPage() {
   const { enrollmentId } = useParams();
 
@@ -573,11 +573,7 @@ export default function StudentDetailPage() {
   }, [detail]);
 
   if (loading) {
-    return (
-      <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
-        <p className="text-slate-600">Loading student detail...</p>
-      </div>
-    );
+    return <StudentDetailSkeleton />;
   }
 
   if (pageError) {
