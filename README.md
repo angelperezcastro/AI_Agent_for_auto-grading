@@ -16,7 +16,17 @@ The platform combines a real full-stack architecture with authentication, relati
 
 ## Visual Hero
 
-![Main Product Screenshot](docs/screenshots/hero-product-overview.png)
+![Main Product Screenshot](docs/screenshots/logo_se_transparent.png)
+
+<p align="center">
+  <video
+    src="docs/screenshots/video_logo.mp4"
+    autoplay
+    muted
+    playsinline
+    width="900">
+  </video>
+</p>
 
 Recommended screenshot: show the deployed app with the professor dashboard or the student workspace after at least one evaluated deliverable. The strongest hero image is a wide screenshot where the evaluator score, deliverable status, and polished dashboard UI are visible.
 
