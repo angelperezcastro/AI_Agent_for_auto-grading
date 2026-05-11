@@ -1,3 +1,4 @@
+import PageShell from "../components/layout/PageShell";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
@@ -315,7 +316,7 @@ export default function BrowsePage() {
         />
       )}
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <PageShell as="main" className="mx-auto max-w-6xl px-4 py-8">
         <section className="mb-8 rounded-3xl bg-slate-900 p-8 text-white">
           <p className="text-sm font-semibold text-cyan-200">
             Student enrollment
@@ -368,7 +369,7 @@ export default function BrowsePage() {
             ))}
           </div>
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import PageShell from "../components/layout/PageShell";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import FeedbackCard from "../components/FeedbackCard";
@@ -606,7 +607,7 @@ export default function WorkspacePage() {
         />
       )}
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <PageShell as="main" className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link
             to="/dashboard"
@@ -758,7 +759,7 @@ export default function WorkspacePage() {
             </ol>
           </section>
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }

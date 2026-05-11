@@ -1,3 +1,4 @@
+import PageShell from "../../components/layout/PageShell";
 import { useEffect, useMemo, useRef, useState } from "react";
 import EmptyState from "../../components/ui/EmptyState";
 import StatusBadge from "../../components/ui/StatusBadge";
@@ -1124,7 +1125,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-8">
+  <PageShell className="space-y-8">
       <OAuthConnectionToast
         toast={oauthToast}
         onDismiss={() => setOauthToast(null)}
@@ -1243,6 +1244,6 @@ export default function SettingsPage() {
         onAssignSubjectDefault={handleAssignSubjectDefault}
         onAssignProject={handleAssignProject}
       />
-    </div>
+    </PageShell>
   );
 }

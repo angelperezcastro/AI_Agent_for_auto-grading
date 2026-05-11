@@ -1,3 +1,4 @@
+import PageShell from "../../components/layout/PageShell";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CardSkeleton, TableSkeleton } from "../../components/ui/Skeletons";
@@ -97,7 +98,7 @@ function ProgressCell({ row }) {
 
 function ProfessorDashboardSkeleton() {
   return (
-    <div className="space-y-8">
+  <PageShell className="space-y-8">
       <section className="rounded-3xl bg-slate-900 p-8 text-white shadow-sm">
         <div className="h-4 w-44 rounded bg-white/10 motion-safe:animate-pulse motion-reduce:animate-none" />
         <div className="mt-4 h-9 w-72 rounded bg-white/10 motion-safe:animate-pulse motion-reduce:animate-none" />
@@ -113,7 +114,7 @@ function ProfessorDashboardSkeleton() {
 
       <CardSkeleton dense />
       <TableSkeleton columns={7} rows={6} />
-    </div>
+    </PageShell>
   );
 }
 

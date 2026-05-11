@@ -1,3 +1,4 @@
+import PageShell from "../../components/layout/PageShell";
 import { useEffect, useMemo, useState } from "react";
 import EmptyState from "../../components/ui/EmptyState";
 import { api, getApiErrorMessage } from "../../services/api";
@@ -529,7 +530,7 @@ export default function ManagePage() {
   }
 
   return (
-    <div className="space-y-8">
+  <PageShell className="space-y-8">
       <section className="flex flex-col justify-between gap-4 rounded-3xl bg-slate-900 p-8 text-white shadow-sm md:flex-row md:items-end">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
@@ -888,6 +889,6 @@ export default function ManagePage() {
           })
         )}
       </section>
-    </div>
+    </PageShell>
   );
 }

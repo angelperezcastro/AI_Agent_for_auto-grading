@@ -1,3 +1,4 @@
+import PageShell from "../components/layout/PageShell";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
@@ -492,7 +493,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-slate-50">
       <Navbar />
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <PageShell as="main" className="mx-auto max-w-6xl px-4 py-8">
         <section className="mb-8 overflow-hidden rounded-3xl bg-slate-900 text-white shadow-sm">
           <div className="grid gap-8 p-8 lg:grid-cols-[1fr_360px] lg:items-center">
             <div>
@@ -607,7 +608,7 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
-      </main>
+      </PageShell>
     </div>
   );
 }
