@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import EmptyState from "../../components/ui/EmptyState";
 import StatusBadge from "../../components/ui/StatusBadge";
 import {
   assignGmailAccountToProject,
@@ -672,14 +673,13 @@ function GmailAssignmentsSection({
       </div>
 
       {subjects.length === 0 ? (
-        <div className="p-10 text-center">
-          <h3 className="text-lg font-black text-slate-900">
-            No subjects available
-          </h3>
-
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Create a subject before assigning Gmail accounts.
-          </p>
+        <div className="p-6">
+          <EmptyState
+            icon="📚"
+            title="No subjects available"
+            description="Create a subject before assigning Gmail accounts. Once a subject exists, you will be able to choose which Gmail address sends its notifications."
+            compact
+          />
         </div>
       ) : (
         <div className="space-y-6 bg-slate-50/70 p-4 md:p-6">
@@ -726,11 +726,12 @@ function GmailAssignmentsSection({
                   />
 
                   {(subject.projects || []).length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
-                      <p className="text-sm font-semibold text-slate-500">
-                        No projects in this subject.
-                      </p>
-                    </div>
+                    <EmptyState
+                      icon="🧩"
+                      title="No projects in this subject"
+                      description="Create a project inside this subject before assigning a project-specific Gmail sender."
+                      compact
+                    />
                   ) : (
                     <div className="space-y-3">
                       {(subject.projects || []).map((project) => {
@@ -1205,13 +1206,14 @@ export default function SettingsPage() {
         </div>
 
         {gmailAccounts.length === 0 ? (
-          <div className="mt-6 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-            <h3 className="text-lg font-black text-slate-900">
-              No Gmail accounts connected
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Connect your first Gmail account before assigning project senders.
-            </p>
+          <div className="mt-6">
+            <EmptyState
+              icon="📨"
+              title="No Gmail accounts connected"
+              description="Connect a Gmail account before assigning project senders or sending test emails. Credentials and OAuth tokens will never be displayed."
+              actionLabel="Connect Gmail account"
+              onAction={handleConnectGmail}
+            />
           </div>
         ) : (
           <div className="mt-6 grid gap-4 xl:grid-cols-2">

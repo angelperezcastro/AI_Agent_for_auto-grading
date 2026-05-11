@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import DeadlineBadge from "../components/ui/DeadlineBadge";
+import EmptyState from "../components/ui/EmptyState";
 import ProgressBar from "../components/ui/ProgressBar";
 import StatusBadge from "../components/ui/StatusBadge";
 import { DELIVERABLES } from "../data/deliverables";
@@ -10,42 +11,18 @@ import { formatDateTime } from "../utils/dates";
 import { useAuth } from "../context/useAuth";
 
 function normalizeList(data) {
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.items)) {
-    return data.items;
-  }
-
-  if (Array.isArray(data?.enrollments)) {
-    return data.enrollments;
-  }
-
-  if (Array.isArray(data?.data)) {
-    return data.data;
-  }
-
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.enrollments)) return data.enrollments;
+  if (Array.isArray(data?.data)) return data.data;
   return [];
 }
 
 function normalizeSubmissionList(data) {
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.submissions)) {
-    return data.submissions;
-  }
-
-  if (Array.isArray(data?.items)) {
-    return data.items;
-  }
-
-  if (Array.isArray(data?.data)) {
-    return data.data;
-  }
-
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.submissions)) return data.submissions;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
   return [];
 }
 
@@ -59,9 +36,7 @@ function getEvaluation(submission) {
 }
 
 function getFinalScore(evaluation) {
-  if (!evaluation) {
-    return null;
-  }
+  if (!evaluation) return null;
 
   if (
     evaluation.is_overridden &&
@@ -90,15 +65,11 @@ function getFinalScore(evaluation) {
 }
 
 function addDays(value, days) {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
 
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
+  if (Number.isNaN(date.getTime())) return null;
 
   date.setDate(date.getDate() + days);
   return date.toISOString();
@@ -199,15 +170,11 @@ function computeEnrollmentMetrics(enrollment, submissions) {
 }
 
 function isDueThisWeek(deadline) {
-  if (!deadline) {
-    return false;
-  }
+  if (!deadline) return false;
 
   const date = new Date(deadline);
 
-  if (Number.isNaN(date.getTime())) {
-    return false;
-  }
+  if (Number.isNaN(date.getTime())) return false;
 
   const now = new Date();
   const sevenDaysFromNow = new Date();
@@ -271,7 +238,6 @@ function MetricCard({ title, value, index }) {
 
 function EnrollmentCard({ enrollment, index }) {
   const navigate = useNavigate();
-
   const metrics = enrollment.metrics;
 
   const deliverableMeta =
@@ -415,9 +381,7 @@ export default function DashboardPage() {
       .map((enrollment) => enrollment.metrics?.latestScore)
       .filter((score) => score !== null && score !== undefined);
 
-    if (scores.length === 0) {
-      return null;
-    }
+    if (scores.length === 0) return null;
 
     const total = scores.reduce((sum, score) => sum + Number(score), 0);
     return Math.round(total / scores.length);
@@ -627,23 +591,13 @@ export default function DashboardPage() {
         )}
 
         {!loading && !error && enrollments.length === 0 && (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
-            <h3 className="text-lg font-black text-slate-900">
-              No active enrollments yet
-            </h3>
-
-            <p className="mt-2 text-sm text-slate-500">
-              Browse available subjects and enroll in a project to start the
-              deliverable workflow.
-            </p>
-
-            <Link
-              to="/browse"
-              className="mt-6 inline-flex rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-            >
-              Browse subjects
-            </Link>
-          </div>
+          <EmptyState
+            icon="🎓"
+            title="No enrollments yet"
+            description="You are not enrolled in any project. Browse available subjects, choose a project and start the deliverable workflow."
+            actionLabel="Browse subjects"
+            to="/browse"
+          />
         )}
 
         {!loading && !error && enrollments.length > 0 && (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import EmptyState from "../../components/ui/EmptyState";
 import { api, getApiErrorMessage } from "../../services/api";
 
 const emptySubjectForm = {
@@ -514,9 +515,7 @@ export default function ManagePage() {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
         <span className="font-bold">Assigned Gmail:</span>{" "}
-        {account
-          ? getGmailAccountEmail([account], accountId)
-          : `Account #${accountId}`}
+        {account ? getGmailAccountEmail([account], accountId) : `Account #${accountId}`}
       </div>
     );
   }
@@ -598,14 +597,13 @@ export default function ManagePage() {
 
       <section className="space-y-6">
         {subjects.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
-            <h2 className="text-xl font-black text-slate-900">
-              No subjects yet
-            </h2>
-            <p className="mt-2 text-slate-500">
-              Create your first subject to start adding projects.
-            </p>
-          </div>
+          <EmptyState
+            icon="📚"
+            title="No subjects yet"
+            description="Create your first subject to organize projects, enroll students and route Gmail notifications correctly."
+            actionLabel="Create a subject above"
+            compact={false}
+          />
         ) : (
           subjects.map((subject) => {
             const subjectProjects = subject.projects || [];
@@ -719,11 +717,7 @@ export default function ManagePage() {
                     <input
                       value={currentProjectForm.topic}
                       onChange={(event) =>
-                        updateProjectForm(
-                          subject.id,
-                          "topic",
-                          event.target.value
-                        )
+                        updateProjectForm(subject.id, "topic", event.target.value)
                       }
                       placeholder="Project topic"
                       className="rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-slate-900"
@@ -753,9 +747,14 @@ export default function ManagePage() {
 
                   <div className="mt-5 grid gap-4 lg:grid-cols-2">
                     {subjectProjects.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-                        No projects created for this subject yet.
-                      </div>
+                      <EmptyState
+                        icon="🧩"
+                        title="No projects in this subject"
+                        description="Add a project so students can enroll and start submitting deliverables."
+                        actionLabel="Use the project form above"
+                        compact
+                        className="lg:col-span-2"
+                      />
                     ) : (
                       subjectProjects.map((project) => (
                         <div

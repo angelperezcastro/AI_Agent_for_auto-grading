@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import EmptyState from "../../components/ui/EmptyState";
 import {
   getProfessorEnrollmentDetail,
   overrideEvaluation,
@@ -137,9 +138,12 @@ function EmailHistory({ logs }) {
       {isOpen && (
         <div className="border-t border-slate-200 p-5">
           {safeLogs.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 p-5 text-sm text-slate-500">
-              No email log entries recorded for this submission.
-            </div>
+            <EmptyState
+              icon="✉️"
+              title="No email logs yet"
+              description="No confirmation, feedback or notification email has been recorded for this submission yet."
+              compact
+            />
           ) : (
             <div className="overflow-hidden rounded-2xl border border-slate-200">
               <table className="min-w-full divide-y divide-slate-200">
@@ -210,9 +214,12 @@ function CriteriaBreakdown({ criteria }) {
 
   if (entries.length === 0) {
     return (
-      <p className="text-sm text-slate-500">
-        No criteria breakdown available.
-      </p>
+      <EmptyState
+        icon="📊"
+        title="No criteria breakdown available"
+        description="The evaluation exists, but the AI did not return criterion-level scores for this deliverable."
+        compact
+      />
     );
   }
 
@@ -365,8 +372,13 @@ function DeliverableCard({ deliverable, onRefresh }) {
       </div>
 
       {!deliverable.submitted ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-slate-300 p-6 text-sm text-slate-500">
-          This deliverable has not been submitted yet.
+        <div className="mt-6">
+          <EmptyState
+            icon="📝"
+            title="No submission yet"
+            description="The student has not submitted this deliverable. Once submitted, the text, AI feedback and email history will appear here."
+            compact
+          />
         </div>
       ) : (
         <div className="mt-6 space-y-6">
@@ -586,6 +598,10 @@ export default function StudentDetailPage() {
     return null;
   }
 
+  const safeDeliverables = Array.isArray(detail.deliverables)
+    ? detail.deliverables
+    : [];
+
   return (
     <div className="space-y-8">
       <section className="rounded-3xl bg-slate-900 p-8 text-white shadow-sm">
@@ -619,13 +635,22 @@ export default function StudentDetailPage() {
       </section>
 
       <section className="space-y-6">
-        {detail.deliverables.map((deliverable) => (
-          <DeliverableCard
-            key={deliverable.deliverable_number}
-            deliverable={deliverable}
-            onRefresh={loadDetail}
+        {safeDeliverables.length === 0 ? (
+          <EmptyState
+            icon="📝"
+            title="No submissions available"
+            description="This enrollment does not have any deliverable records yet. Once the student submits work, it will appear here."
+            compact={false}
           />
-        ))}
+        ) : (
+          safeDeliverables.map((deliverable) => (
+            <DeliverableCard
+              key={deliverable.deliverable_number}
+              deliverable={deliverable}
+              onRefresh={loadDetail}
+            />
+          ))
+        )}
       </section>
     </div>
   );

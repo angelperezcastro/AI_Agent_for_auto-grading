@@ -4,6 +4,7 @@ import FeedbackCard from "../components/FeedbackCard";
 import Navbar from "../components/Navbar";
 import SubmissionForm from "../components/SubmissionForm";
 import DeadlineBadge from "../components/ui/DeadlineBadge";
+import EmptyState from "../components/ui/EmptyState";
 import ProgressBar from "../components/ui/ProgressBar";
 import StatusBadge from "../components/ui/StatusBadge";
 import { DELIVERABLES } from "../data/deliverables";
@@ -12,22 +13,10 @@ import { formatDateTime } from "../utils/dates";
 import { SUBMISSION_EMAIL_FAILED_MESSAGE } from "../utils/emailUxMessages";
 
 function normalizeSubmissionList(data) {
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.submissions)) {
-    return data.submissions;
-  }
-
-  if (Array.isArray(data?.items)) {
-    return data.items;
-  }
-
-  if (Array.isArray(data?.data)) {
-    return data.data;
-  }
-
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.submissions)) return data.submissions;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
   return [];
 }
 
@@ -41,9 +30,7 @@ function getEvaluation(submission) {
 }
 
 function getScore(evaluation) {
-  if (!evaluation) {
-    return null;
-  }
+  if (!evaluation) return null;
 
   if (
     evaluation.is_overridden &&
@@ -91,25 +78,11 @@ function getTimelineStatus(deliverableNumber, submissionsByNumber) {
   const submission = submissionsByNumber[deliverableNumber];
   const previousSubmission = submissionsByNumber[deliverableNumber - 1];
 
-  if (submission?.status === "overdue") {
-    return "overdue";
-  }
-
-  if (submission && getEvaluation(submission)) {
-    return "graded";
-  }
-
-  if (submission) {
-    return "submitted";
-  }
-
-  if (deliverableNumber === 1) {
-    return "open";
-  }
-
-  if (previousSubmission && getEvaluation(previousSubmission)) {
-    return "open";
-  }
+  if (submission?.status === "overdue") return "overdue";
+  if (submission && getEvaluation(submission)) return "graded";
+  if (submission) return "submitted";
+  if (deliverableNumber === 1) return "open";
+  if (previousSubmission && getEvaluation(previousSubmission)) return "open";
 
   return "locked";
 }
@@ -118,7 +91,6 @@ function getTimelineStatusMeta(status) {
   const meta = {
     locked: {
       label: "Locked",
-      shortLabel: "Locked",
       icon: "🔒",
       nodeClass: "border-slate-300 bg-white text-slate-400",
       lineClass: "bg-slate-200",
@@ -127,7 +99,6 @@ function getTimelineStatusMeta(status) {
     },
     open: {
       label: "Open",
-      shortLabel: "Ready",
       icon: null,
       nodeClass:
         "border-cyan-400 bg-cyan-50 text-cyan-700 shadow-lg shadow-cyan-100 motion-safe:animate-pulse motion-reduce:animate-none",
@@ -137,7 +108,6 @@ function getTimelineStatusMeta(status) {
     },
     submitted: {
       label: "AI evaluating",
-      shortLabel: "Pending",
       icon: "⏳",
       nodeClass: "border-amber-400 bg-amber-50 text-amber-700",
       lineClass: "bg-gradient-to-b from-amber-300 to-slate-200",
@@ -145,7 +115,6 @@ function getTimelineStatusMeta(status) {
     },
     graded: {
       label: "Evaluated",
-      shortLabel: "Done",
       icon: "✓",
       nodeClass: "border-emerald-400 bg-emerald-50 text-emerald-700",
       lineClass: "bg-emerald-300",
@@ -153,7 +122,6 @@ function getTimelineStatusMeta(status) {
     },
     overdue: {
       label: "Overdue",
-      shortLabel: "Overdue",
       icon: "!",
       nodeClass: "border-red-400 bg-red-50 text-red-700",
       lineClass: "bg-gradient-to-b from-red-300 to-slate-200",
@@ -268,9 +236,7 @@ function DeliverableStep({
   const lockedReasonId = `locked-reason-deliverable-${deliverable.number}`;
 
   function triggerLockedFeedback() {
-    if (!isLocked) {
-      return;
-    }
+    if (!isLocked) return;
 
     setLockedAttempted(true);
 
@@ -280,9 +246,7 @@ function DeliverableStep({
   }
 
   function handleLockedKeyDown(event) {
-    if (!isLocked) {
-      return;
-    }
+    if (!isLocked) return;
 
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -749,6 +713,27 @@ export default function WorkspacePage() {
                 Sequential locking enabled
               </p>
             </div>
+
+            {submissions.length === 0 && (
+              <div className="mb-6">
+                <EmptyState
+                  icon="📝"
+                  title="No submissions yet"
+                  description="This workspace is ready. Start with Deliverable 1 to send your first submission for AI evaluation."
+                  actionLabel="Start first deliverable"
+                  onAction={() => {
+                    const firstDeliverable = DELIVERABLES.find(
+                      (deliverable) => deliverable.number === 1
+                    );
+
+                    if (firstDeliverable) {
+                      handleWrite(firstDeliverable);
+                    }
+                  }}
+                  compact
+                />
+              </div>
+            )}
 
             <ol className="relative">
               {DELIVERABLES.map((deliverable, index) => {
