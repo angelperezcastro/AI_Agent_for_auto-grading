@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import DeadlineBadge from "../components/ui/DeadlineBadge";
 import ProgressBar from "../components/ui/ProgressBar";
+import StatusBadge from "../components/ui/StatusBadge";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
 import { formatDateTime } from "../utils/dates";
@@ -231,24 +232,6 @@ function getScoreBadgeClass(score) {
   return "bg-red-50 text-red-700";
 }
 
-function getStatusBadgeClass(status) {
-  const normalizedStatus = String(status || "").toLowerCase();
-
-  if (normalizedStatus === "completed") {
-    return "bg-emerald-50 text-emerald-700";
-  }
-
-  if (normalizedStatus === "overdue") {
-    return "bg-red-50 text-red-700";
-  }
-
-  if (normalizedStatus === "dropped") {
-    return "bg-slate-100 text-slate-500";
-  }
-
-  return "bg-cyan-50 text-cyan-700";
-}
-
 function getStaggerStyle(index) {
   return {
     "--dashboard-card-delay": `${Math.min(index * 65, 360)}ms`,
@@ -333,13 +316,11 @@ function EnrollmentCard({ enrollment, index }) {
           </p>
         </div>
 
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${getStatusBadgeClass(
-            enrollment.status
-          )}`}
-        >
-          {enrollment.status || "active"}
-        </span>
+        <StatusBadge
+          status={enrollment.status || "active"}
+          size="sm"
+          className="uppercase tracking-wide"
+        />
       </div>
 
       <div className="mt-6">

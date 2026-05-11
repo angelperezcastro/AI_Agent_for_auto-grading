@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import SubmissionForm from "../components/SubmissionForm";
 import DeadlineBadge from "../components/ui/DeadlineBadge";
 import ProgressBar from "../components/ui/ProgressBar";
+import StatusBadge from "../components/ui/StatusBadge";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
 import { formatDateTime } from "../utils/dates";
@@ -119,7 +120,6 @@ function getTimelineStatusMeta(status) {
       label: "Locked",
       shortLabel: "Locked",
       icon: "🔒",
-      badgeClass: "border-slate-200 bg-slate-100 text-slate-500",
       nodeClass: "border-slate-300 bg-white text-slate-400",
       lineClass: "bg-slate-200",
       cardClass:
@@ -129,7 +129,6 @@ function getTimelineStatusMeta(status) {
       label: "Open",
       shortLabel: "Ready",
       icon: null,
-      badgeClass: "border-cyan-200 bg-cyan-50 text-cyan-700",
       nodeClass:
         "border-cyan-400 bg-cyan-50 text-cyan-700 shadow-lg shadow-cyan-100 motion-safe:animate-pulse motion-reduce:animate-none",
       lineClass: "bg-gradient-to-b from-cyan-300 to-slate-200",
@@ -140,7 +139,6 @@ function getTimelineStatusMeta(status) {
       label: "AI evaluating",
       shortLabel: "Pending",
       icon: "⏳",
-      badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
       nodeClass: "border-amber-400 bg-amber-50 text-amber-700",
       lineClass: "bg-gradient-to-b from-amber-300 to-slate-200",
       cardClass: "border-amber-200 bg-white",
@@ -149,7 +147,6 @@ function getTimelineStatusMeta(status) {
       label: "Evaluated",
       shortLabel: "Done",
       icon: "✓",
-      badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
       nodeClass: "border-emerald-400 bg-emerald-50 text-emerald-700",
       lineClass: "bg-emerald-300",
       cardClass: "border-emerald-200 bg-white",
@@ -158,7 +155,6 @@ function getTimelineStatusMeta(status) {
       label: "Overdue",
       shortLabel: "Overdue",
       icon: "!",
-      badgeClass: "border-red-200 bg-red-50 text-red-700",
       nodeClass: "border-red-400 bg-red-50 text-red-700",
       lineClass: "bg-gradient-to-b from-red-300 to-slate-200",
       cardClass: "border-red-200 bg-white ring-4 ring-red-50",
@@ -334,11 +330,12 @@ function DeliverableStep({
                 {deliverable.name}
               </h2>
 
-              <span
-                className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${statusMeta.badgeClass}`}
-              >
-                {statusMeta.label}
-              </span>
+              <StatusBadge
+                status={isSubmitted ? "pending" : status}
+                label={statusMeta.label}
+                size="sm"
+                className="uppercase tracking-wide"
+              />
             </div>
 
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
