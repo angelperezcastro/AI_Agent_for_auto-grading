@@ -12,17 +12,24 @@ AI Agent for Auto-Grading is a production-oriented academic web platform designe
 
 The platform combines a real full-stack architecture with authentication, relational data modeling, Google Gemini evaluation, Gmail OAuth integration, HTML email delivery, audit logging, professor dashboards, and manual score override. It is intended for professors who want faster formative feedback loops and for students who need immediate, rubric-aware feedback during requirements engineering assignments.
 
+App: https://ai-agent-for-auto-grading.vercel.app
+
 ---
 
 ## Visual Hero
 
-![Main Product Screenshot](docs/screenshots/logo_se_transparent.png)
-
 <p align="center">
-  <img src="docs/screenshots/video_logo.gif" width="900" alt="AI Agent for Auto-Grading visual hero demo" />
+  <img
+    src="docs/screenshots/logo_se_transparent.png"
+    alt="AI Agent for Auto-Grading logo"
+    width="420"
+  />
 </p>
 
-Recommended screenshot: show the deployed app with the professor dashboard or the student workspace after at least one evaluated deliverable. The strongest hero image is a wide screenshot where the evaluator score, deliverable status, and polished dashboard UI are visible.
+<p align="center">
+  <strong>AI-powered academic auto-grading platform with structured feedback, Gmail automation, and professor supervision.</strong>
+</p>
+
 
 ---
 
