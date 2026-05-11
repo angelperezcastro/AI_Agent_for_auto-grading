@@ -139,6 +139,14 @@ function getAccountErrorMessage(account) {
   );
 }
 
+function getAccountById(gmailAccounts, rawId) {
+  if (rawId === null || rawId === undefined || rawId === "") {
+    return null;
+  }
+
+  return gmailAccounts.find((account) => Number(account.id) === Number(rawId));
+}
+
 function findConnectedAccountAfterOAuth(previousAccounts, nextAccounts, startedAt) {
   const previousByEmail = new Map(
     previousAccounts
@@ -213,6 +221,21 @@ function OAuthConnectionToast({ toast, onDismiss }) {
               transform: translateY(0) scale(1);
             }
           }
+
+          @keyframes gmailCheckPop {
+            0% {
+              opacity: 0;
+              transform: scale(0.75);
+            }
+            70% {
+              opacity: 1;
+              transform: scale(1.12);
+            }
+            100% {
+              opacity: 1;
+              transform: scale(1);
+            }
+          }
         `}
       </style>
 
@@ -267,25 +290,6 @@ function OAuthConnectionToast({ toast, onDismiss }) {
                 <path d="M12 17h.01" />
               </svg>
             )}
-
-            <style>
-              {`
-                @keyframes gmailCheckPop {
-                  0% {
-                    opacity: 0;
-                    transform: scale(0.75);
-                  }
-                  70% {
-                    opacity: 1;
-                    transform: scale(1.12);
-                  }
-                  100% {
-                    opacity: 1;
-                    transform: scale(1);
-                  }
-                }
-              `}
-            </style>
           </div>
 
           <div className="min-w-0 flex-1">
@@ -450,6 +454,318 @@ function GmailAccountCard({
         </div>
       </div>
     </article>
+  );
+}
+
+function AssignmentArrow() {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-400 shadow-sm"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-4 w-4"
+      >
+        <path d="M5 12h14" />
+        <path d="m13 6 6 6-6 6" />
+      </svg>
+    </div>
+  );
+}
+
+function AssignedAccountPanel({ account }) {
+  if (!account) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-black text-amber-800"
+          >
+            !
+          </span>
+
+          <div>
+            <p className="text-sm font-black text-amber-900">
+              No Gmail account assigned
+            </p>
+            <p className="mt-1 text-xs leading-5 text-amber-800">
+              Emails may not be sent from this subject or project until a Gmail
+              account is selected.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const accountStatus = getGmailAccountStatus(account);
+  const badgeProps = getStatusBadgeProps(accountStatus);
+
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className={[
+                "h-2.5 w-2.5 shrink-0 rounded-full shadow-lg",
+                getConnectionDotClass(accountStatus),
+              ].join(" ")}
+            />
+
+            <p className="truncate text-sm font-black text-emerald-950">
+              {account.account_email}
+            </p>
+          </div>
+
+          <p className="mt-1 text-xs leading-5 text-emerald-800">
+            This Gmail account will be used for email notifications.
+          </p>
+        </div>
+
+        <StatusBadge
+          status={badgeProps.status}
+          label={badgeProps.label}
+          size="sm"
+        />
+      </div>
+    </div>
+  );
+}
+
+function AccountSelect({
+  value,
+  gmailAccounts,
+  disabled,
+  onChange,
+  label,
+  allowEmpty = true,
+}) {
+  return (
+    <label className="block">
+      <span className="sr-only">{label}</span>
+
+      <select
+        value={value || ""}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition hover:border-slate-300 focus:border-slate-900 focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {allowEmpty && <option value="">No Gmail account assigned</option>}
+
+        {gmailAccounts.map((account) => (
+          <option key={account.id} value={account.id}>
+            {account.account_email}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function AssignmentRow({
+  type,
+  title,
+  subtitle,
+  assignedAccount,
+  selectedValue,
+  gmailAccounts,
+  disabled,
+  onChange,
+}) {
+  const isSubject = type === "subject";
+
+  return (
+    <article
+      className={[
+        "rounded-3xl border bg-white p-5 shadow-sm transition duration-200",
+        assignedAccount
+          ? "border-slate-200 hover:border-cyan-200 hover:shadow-md"
+          : "border-amber-200 ring-1 ring-amber-100",
+      ].join(" ")}
+    >
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.15fr)] lg:items-center">
+        <div className="min-w-0">
+          <p
+            className={[
+              "text-xs font-black uppercase tracking-[0.18em]",
+              isSubject ? "text-cyan-700" : "text-slate-400",
+            ].join(" ")}
+          >
+            {isSubject ? "Subject" : "Project"}
+          </p>
+
+          <h3 className="mt-1 truncate text-base font-black text-slate-900">
+            {title}
+          </h3>
+
+          {subtitle && (
+            <p className="mt-1 text-sm leading-6 text-slate-500">{subtitle}</p>
+          )}
+        </div>
+
+        <AssignmentArrow />
+
+        <div className="min-w-0 space-y-3">
+          <div>
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+              Gmail Account
+            </p>
+
+            <AssignedAccountPanel account={assignedAccount} />
+          </div>
+
+          <AccountSelect
+            value={selectedValue}
+            gmailAccounts={gmailAccounts}
+            disabled={disabled}
+            onChange={onChange}
+            label={`Change Gmail account for ${title}`}
+          />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function GmailAssignmentsSection({
+  subjects,
+  gmailAccounts,
+  accountsBySubjectId,
+  actionLoading,
+  onAssignSubjectDefault,
+  onAssignProject,
+}) {
+  return (
+    <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-white px-6 py-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">
+              Sender routing
+            </p>
+
+            <h2 className="mt-2 text-xl font-black text-slate-900">
+              Gmail Account Assignments
+            </h2>
+
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+              Choose which Gmail account sends emails for each subject and
+              project. A connected account means student confirmations,
+              professor notifications and feedback emails can be sent.
+            </p>
+          </div>
+
+          <div className="w-fit rounded-full bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-500">
+            {gmailAccounts.length} Gmail{" "}
+            {gmailAccounts.length === 1 ? "account" : "accounts"} available
+          </div>
+        </div>
+      </div>
+
+      {subjects.length === 0 ? (
+        <div className="p-10 text-center">
+          <h3 className="text-lg font-black text-slate-900">
+            No subjects available
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Create a subject before assigning Gmail accounts.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-6 bg-slate-50/70 p-4 md:p-6">
+          {subjects.map((subject) => {
+            const subjectDefault =
+              accountsBySubjectId?.get?.(Number(subject.id)) || null;
+
+            return (
+              <section
+                key={subject.id}
+                className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:p-5"
+              >
+                <div className="mb-4 flex flex-col gap-2 border-b border-slate-100 pb-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-cyan-700">
+                      Subject group
+                    </p>
+
+                    <h3 className="mt-1 text-lg font-black text-slate-900">
+                      {subject.name}
+                    </h3>
+                  </div>
+
+                  <p className="text-sm font-semibold text-slate-500">
+                    {(subject.projects || []).length}{" "}
+                    {(subject.projects || []).length === 1
+                      ? "project"
+                      : "projects"}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <AssignmentRow
+                    type="subject"
+                    title={subject.name}
+                    subtitle="Default sender for this subject."
+                    assignedAccount={subjectDefault}
+                    selectedValue={subjectDefault?.id || ""}
+                    gmailAccounts={gmailAccounts}
+                    disabled={actionLoading || gmailAccounts.length === 0}
+                    onChange={(value) =>
+                      onAssignSubjectDefault(subject.id, value)
+                    }
+                  />
+
+                  {(subject.projects || []).length === 0 ? (
+                    <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+                      <p className="text-sm font-semibold text-slate-500">
+                        No projects in this subject.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(subject.projects || []).map((project) => {
+                        const projectAccountId =
+                          getProjectGmailAccountId(project);
+                        const projectAccount = getAccountById(
+                          gmailAccounts,
+                          projectAccountId
+                        );
+
+                        return (
+                          <AssignmentRow
+                            key={project.id}
+                            type="project"
+                            title={project.name}
+                            subtitle={project.topic}
+                            assignedAccount={projectAccount}
+                            selectedValue={projectAccount?.id || ""}
+                            gmailAccounts={gmailAccounts}
+                            disabled={
+                              actionLoading || gmailAccounts.length === 0
+                            }
+                            onChange={(value) => onAssignProject(project, value)}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -917,123 +1233,14 @@ export default function SettingsPage() {
         )}
       </section>
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-6 py-5">
-          <h2 className="text-xl font-black text-slate-900">
-            Account Assignments
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Assign a default Gmail account to each subject and a specific Gmail
-            account to each project.
-          </p>
-        </div>
-
-        {subjects.length === 0 ? (
-          <div className="p-10 text-center text-slate-500">
-            No subjects available.
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-200">
-            {subjects.map((subject) => {
-              const subjectDefault = accountsBySubjectId.get(Number(subject.id));
-
-              return (
-                <div key={subject.id} className="p-6">
-                  <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                        Subject
-                      </p>
-                      <h3 className="mt-1 text-xl font-black text-slate-900">
-                        {subject.name}
-                      </h3>
-                    </div>
-
-                    <select
-                      value={subjectDefault?.id || ""}
-                      onChange={(event) =>
-                        handleAssignSubjectDefault(subject.id, event.target.value)
-                      }
-                      disabled={actionLoading || gmailAccounts.length === 0}
-                      className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 disabled:opacity-60"
-                    >
-                      <option value="">No subject default</option>
-
-                      {gmailAccounts.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.account_email}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-                    <table className="min-w-full divide-y divide-slate-200">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                            Project
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                            Topic
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-wider text-slate-500">
-                            Gmail Account
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody className="divide-y divide-slate-100 bg-white">
-                        {(subject.projects || []).length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={3}
-                              className="px-4 py-6 text-center text-sm text-slate-500"
-                            >
-                              No projects in this subject.
-                            </td>
-                          </tr>
-                        ) : (
-                          subject.projects.map((project) => (
-                            <tr key={project.id}>
-                              <td className="px-4 py-4 text-sm font-bold text-slate-900">
-                                {project.name}
-                              </td>
-                              <td className="px-4 py-4 text-sm text-slate-500">
-                                {project.topic}
-                              </td>
-                              <td className="px-4 py-4">
-                                <select
-                                  value={getProjectGmailAccountId(project) || ""}
-                                  onChange={(event) =>
-                                    handleAssignProject(project, event.target.value)
-                                  }
-                                  disabled={
-                                    actionLoading || gmailAccounts.length === 0
-                                  }
-                                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 disabled:opacity-60"
-                                >
-                                  <option value="">No project account</option>
-
-                                  {gmailAccounts.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                      {account.account_email}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <GmailAssignmentsSection
+        subjects={subjects}
+        gmailAccounts={gmailAccounts}
+        accountsBySubjectId={accountsBySubjectId}
+        actionLoading={actionLoading}
+        onAssignSubjectDefault={handleAssignSubjectDefault}
+        onAssignProject={handleAssignProject}
+      />
     </div>
   );
 }
