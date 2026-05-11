@@ -418,3 +418,147 @@ a {
     transform: none !important;
   }
 }
+
+@layer utilities {
+  .process-flow-node {
+    animation: processFlowNodeGlow 8s ease-in-out infinite;
+    will-change: transform, opacity, box-shadow, border-color;
+  }
+
+  .process-flow-delay-0 {
+    animation-delay: 0s;
+  }
+
+  .process-flow-delay-1 {
+    animation-delay: 2s;
+  }
+
+  .process-flow-delay-2 {
+    animation-delay: 4s;
+  }
+
+  .process-flow-delay-3 {
+    animation-delay: 6s;
+  }
+
+  .process-flow-connector-horizontal {
+    overflow: hidden;
+  }
+
+  .process-flow-connector-horizontal::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 38%;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(103, 232, 249, 0.9),
+      rgba(110, 231, 183, 0.75),
+      transparent
+    );
+    animation: processFlowLineHorizontal 8s ease-in-out infinite;
+  }
+
+  .process-flow-connector-vertical {
+    overflow: hidden;
+  }
+
+  .process-flow-connector-vertical::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    height: 30%;
+    border-radius: inherit;
+    background: linear-gradient(
+      180deg,
+      transparent,
+      rgba(103, 232, 249, 0.9),
+      rgba(110, 231, 183, 0.75),
+      transparent
+    );
+    animation: processFlowLineVertical 8s ease-in-out infinite;
+  }
+}
+
+@keyframes processFlowNodeGlow {
+  0%,
+  18%,
+  100% {
+    transform: translateY(0) scale(1);
+    border-color: rgba(103, 232, 249, 0.16);
+    background: rgba(2, 6, 23, 0.8);
+    box-shadow: 0 12px 28px rgba(8, 47, 73, 0.25);
+    opacity: 0.72;
+  }
+
+  8% {
+    transform: translateY(-3px) scale(1.06);
+    border-color: rgba(103, 232, 249, 0.62);
+    background: rgba(8, 47, 73, 0.72);
+    box-shadow:
+      0 0 0 7px rgba(103, 232, 249, 0.08),
+      0 18px 42px rgba(34, 211, 238, 0.24);
+    opacity: 1;
+  }
+}
+
+@keyframes processFlowLineHorizontal {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(295%);
+    opacity: 0;
+  }
+}
+
+@keyframes processFlowLineVertical {
+  0% {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(340%);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .process-flow-node,
+  .process-flow-connector-horizontal::after,
+  .process-flow-connector-vertical::after {
+    animation: none !important;
+  }
+
+  .process-flow-node {
+    transform: none !important;
+    opacity: 1;
+  }
+
+  .process-flow-connector-horizontal::after,
+  .process-flow-connector-vertical::after {
+    opacity: 0.45;
+    transform: none !important;
+  }
+}

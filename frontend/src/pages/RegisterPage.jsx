@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthFloatingIcons from "../components/auth/AuthFloatingIcons";
+import ProcessFlowPreview from "../components/ui/ProcessFlowPreview";
 import { useAuth } from "../context/useAuth";
 import { getApiErrorMessage } from "../services/api";
 
@@ -195,9 +196,16 @@ export default function RegisterPage() {
                 Login
               </Link>
             </p>
+
+            <div className="mt-8 lg:hidden">
+              <ProcessFlowPreview
+                title="Academic workflow"
+                subtitle="Submit, AI review, feedback delivery, and professor override."
+              />
+            </div>
           </div>
 
-          <div className="hidden rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-8 lg:flex lg:flex-col lg:justify-between">
+          <aside className="hidden rounded-[1.5rem] border border-white/10 bg-slate-950/35 p-8 shadow-2xl shadow-slate-950/30 backdrop-blur-xl lg:flex lg:flex-col lg:justify-between">
             <div>
               <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-sm font-medium text-cyan-100 shadow-lg shadow-cyan-950/20">
                 <span className="auth-soft-pulse h-2 w-2 rounded-full bg-cyan-300" />
@@ -205,36 +213,44 @@ export default function RegisterPage() {
               </p>
 
               <h2 className="max-w-xl text-5xl font-bold tracking-tight text-white">
-                One platform for students, professors, AI feedback, and Gmail
-                notifications.
+                Join a structured AI-assisted academic platform.
               </h2>
 
               <p className="mt-6 max-w-lg text-lg leading-8 text-slate-300">
-                Students submit four sequential deliverables. Professors monitor
-                progress, review AI feedback, and override scores when needed.
+                Students complete sequential deliverables, receive AI-generated
+                feedback, and professors supervise the process with full
+                visibility and manual override control.
               </p>
             </div>
 
-            <div className="mt-10 space-y-3">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
-                <p className="text-sm font-semibold text-white">
-                  Student workspace
-                </p>
-                <p className="mt-1 text-sm leading-6 text-slate-400">
-                  Submit work, unlock deliverables, and view structured feedback.
-                </p>
-              </div>
+            <div className="mt-8 space-y-5">
+              <ProcessFlowPreview
+                title="Process preview"
+                subtitle="A decorative overview of how submissions move through SE Autograder."
+              />
 
-              <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
-                <p className="text-sm font-semibold text-white">
-                  Professor supervision
-                </p>
-                <p className="mt-1 text-sm leading-6 text-slate-400">
-                  Track progress, inspect feedback, and apply manual overrides.
-                </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
+                  <p className="text-sm font-semibold text-white">
+                    Student workspace
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    Submit work, unlock deliverables, and view structured
+                    feedback.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-4">
+                  <p className="text-sm font-semibold text-white">
+                    Professor control
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    Monitor progress, review AI output, and override scores.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </aside>
         </section>
       </div>
     </main>
