@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   color: #0f172a;
   background: #f8fafc;
 }
@@ -12,9 +13,19 @@
   box-sizing: border-box;
 }
 
+html {
+  min-width: 320px;
+  min-height: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100vh;
+  background: #020617;
+}
+
+#root {
   min-height: 100vh;
 }
 
@@ -28,4 +39,140 @@ textarea {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+::selection {
+  background: rgba(103, 232, 249, 0.28);
+  color: #ffffff;
+}
+
+@layer utilities {
+  .auth-premium-bg {
+    background-image:
+      radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.18), transparent 30%),
+      radial-gradient(circle at 85% 10%, rgba(99, 102, 241, 0.2), transparent 32%),
+      radial-gradient(circle at 50% 90%, rgba(20, 184, 166, 0.14), transparent 35%),
+      linear-gradient(135deg, #020617 0%, #07111f 42%, #082f49 100%);
+    background-size: 140% 140%;
+    animation: authGradientShift 18s ease-in-out infinite;
+  }
+
+  .auth-grid-overlay {
+    background-image:
+      linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(circle at center, black 0%, transparent 72%);
+    -webkit-mask-image: radial-gradient(circle at center, black 0%, transparent 72%);
+  }
+
+  .auth-blob {
+    animation-duration: 24s;
+    animation-iteration-count: infinite;
+    animation-timing-function: ease-in-out;
+    will-change: transform;
+  }
+
+  .auth-blob-a {
+    animation-name: authBlobFloatA;
+  }
+
+  .auth-blob-b {
+    animation-name: authBlobFloatB;
+  }
+
+  .auth-blob-c {
+    animation-name: authBlobFloatC;
+  }
+
+  .auth-card-enter {
+    animation: authCardEnter 720ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .auth-soft-pulse {
+    animation: authSoftPulse 3.6s ease-in-out infinite;
+  }
+}
+
+@keyframes authGradientShift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes authBlobFloatA {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(46px, 34px, 0) scale(1.08);
+  }
+}
+
+@keyframes authBlobFloatB {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(-42px, 52px, 0) scale(1.06);
+  }
+}
+
+@keyframes authBlobFloatC {
+  0%,
+  100% {
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(-50%, -34px, 0) scale(1.08);
+  }
+}
+
+@keyframes authCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes authSoftPulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    box-shadow: 0 0 0 0 rgba(103, 232, 249, 0.32);
+  }
+
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 7px rgba(103, 232, 249, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-premium-bg,
+  .auth-blob,
+  .auth-card-enter,
+  .auth-soft-pulse {
+    animation: none !important;
+  }
+
+  .auth-card-enter {
+    opacity: 1;
+    transform: none;
+  }
 }
