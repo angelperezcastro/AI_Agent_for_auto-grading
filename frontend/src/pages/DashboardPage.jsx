@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
+import DeadlineBadge from "../components/ui/DeadlineBadge";
 import ProgressBar from "../components/ui/ProgressBar";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
-import { formatDateTime, getDeadlineCountdown } from "../utils/dates";
+import { formatDateTime } from "../utils/dates";
 import { useAuth } from "../context/useAuth";
 
 function normalizeList(data) {
@@ -289,7 +290,6 @@ function EnrollmentCard({ enrollment, index }) {
   const navigate = useNavigate();
 
   const metrics = enrollment.metrics;
-  const countdown = getDeadlineCountdown(metrics.nextDeadline);
 
   const deliverableMeta =
     DELIVERABLES.find(
@@ -377,19 +377,13 @@ function EnrollmentCard({ enrollment, index }) {
             Next deadline
           </p>
 
-          <p
-            className={`mt-2 text-sm font-bold ${
-              countdown.isOverdue ? "text-red-700" : "text-slate-700"
-            }`}
-          >
-            {metrics.nextDeadline ? countdown.label : "Not available"}
-          </p>
-
-          {metrics.nextDeadline && (
-            <p className="mt-1 text-xs text-slate-400">
-              {formatDateTime(metrics.nextDeadline)}
-            </p>
-          )}
+          <div className="mt-2">
+            <DeadlineBadge
+              deadline_at={metrics.nextDeadline}
+              status={enrollment.status}
+              className="w-full justify-start"
+            />
+          </div>
         </div>
       </div>
 

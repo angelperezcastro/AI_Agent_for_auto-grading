@@ -3,10 +3,11 @@ import { Link, useParams } from "react-router-dom";
 import FeedbackCard from "../components/FeedbackCard";
 import Navbar from "../components/Navbar";
 import SubmissionForm from "../components/SubmissionForm";
+import DeadlineBadge from "../components/ui/DeadlineBadge";
 import ProgressBar from "../components/ui/ProgressBar";
 import { DELIVERABLES } from "../data/deliverables";
 import { api, getApiErrorMessage } from "../services/api";
-import { formatDateTime, getDeadlineCountdown } from "../utils/dates";
+import { formatDateTime } from "../utils/dates";
 import { SUBMISSION_EMAIL_FAILED_MESSAGE } from "../utils/emailUxMessages";
 
 function normalizeSubmissionList(data) {
@@ -160,7 +161,6 @@ function DeliverableStep({
 }) {
   const evaluation = getEvaluation(submission);
   const score = getScore(evaluation);
-  const countdown = getDeadlineCountdown(submission?.deadline_at);
   const submittedAt = formatDateTime(submission?.submitted_at);
   const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
 
@@ -247,13 +247,14 @@ function DeliverableStep({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
               Deadline
             </p>
-            <p
-              className={`mt-1 text-sm font-medium ${
-                countdown.isOverdue ? "text-red-700" : "text-slate-700"
-              }`}
-            >
-              {countdown.label}
-            </p>
+
+            <div className="mt-2">
+              <DeadlineBadge
+                deadline_at={submission?.deadline_at}
+                status={status}
+                className="w-full justify-start"
+              />
+            </div>
           </div>
 
           <div className="rounded-2xl bg-slate-50 p-4">
