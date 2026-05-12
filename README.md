@@ -50,6 +50,7 @@ App: https://ai-agent-for-auto-grading.vercel.app
 - [Local Setup](#local-setup)
 - [Environment Variables](#environment-variables)
 - [Production Deployment](#production-deployment)
+- [Railway Deployment Details](#railway-deployment-details)
 - [Production Smoke Test Checklist](#production-smoke-test-checklist)
 - [Security Considerations](#security-considerations)
 - [Testing and Validation](#testing-and-validation)
@@ -734,51 +735,44 @@ Add screenshots under `docs/screenshots/` using the file names below. These plac
 
 ### Landing or Login Screen
 
-![Login Screen](docs/screenshots/login-screen.png)
+![Login Screen](docs/screenshots/loginScreen.png)
 
-Recommended screenshot: show the login page with the final visual styling, including the email/password form and clear app identity.
 
 ### Professor Dashboard
 
-![Professor Dashboard](docs/screenshots/professor-dashboard.png)
+![Professor Dashboard](docs/screenshots/professorDashboard1.png)
+![Professor Dashboard](docs/screenshots/professorDashboard2.png)
 
-Recommended screenshot: show the professor dashboard after at least one evaluated submission, including student name, project, progress, latest score, status, and email status.
 
 ### Gmail Connection and Settings
 
-![Gmail Settings](docs/screenshots/gmail-settings.png)
+![Gmail Settings](docs/screenshots/gmailAccountsAdnSettings1.png)
+![Gmail Settings](docs/screenshots/gmailAccountsAndSettings2.png)
 
-Recommended screenshot: show `/professor/settings` with at least one connected Gmail account, active status, Send Test Email button, and assignment controls.
 
 ### Subject and Project Management
 
-![Subject and Project Management](docs/screenshots/subject-project-management.png)
+![Subject and Project Management](docs/screenshots/manageSubjects1.png)
+![Subject and Project Management](docs/screenshots/manageSubjects2.png)
 
-Recommended screenshot: show the professor management page with at least one subject, project cards, project topic, and Gmail account assignment state.
+### Student Dashboard
+![Student Dashboard](docs/screenshots/studentDashboard1.png)
+![Student Dashboard](docs/screenshots/studentDashboard2.png)
 
 ### Student Submission Workspace
 
-![Student Submission Workspace](docs/screenshots/student-submission-workspace.png)
+![Student Submission Workspace](docs/screenshots/submission1.png)
+![Student Submission Workspace](docs/screenshots/submission2.png)
+![Student Submission Workspace](docs/screenshots/submission3.png)
 
-Recommended screenshot: show the four-deliverable timeline with one deliverable open, one submitted or evaluated, and the sequential locking message visible.
 
-### AI Feedback View
-
-![AI Feedback View](docs/screenshots/ai-feedback-view.png)
-
-Recommended screenshot: show a completed evaluation with final score, criterion breakdown, progress bars, and detailed feedback text.
 
 ### Gmail Inbox Email
 
-![Gmail Inbox Email](docs/screenshots/gmail-feedback-email.png)
+![Gmail Inbox Email](docs/screenshots/feddbackEmail1.png)
+![Gmail Inbox Email](docs/screenshots/feddbackEmail2.png)
+![Gmail Inbox Email](docs/screenshots/feddbackEmail3.png)
 
-Recommended screenshot: show a real received Gmail feedback email with score, criteria, and feedback. Hide or blur private email addresses if necessary.
-
-### Score Override Flow
-
-![Score Override Flow](docs/screenshots/score-override-flow.png)
-
-Recommended screenshot: show the professor student-detail page with the override form or an already overridden evaluation showing AI score and professor score.
 
 ---
 
@@ -989,6 +983,177 @@ After deployment, run the complete smoke test below before using the app for a d
 
 ---
 
+## Railway Deployment Details
+
+This section documents the production backend deployment on Railway in a more operational way than the general deployment summary above. It is meant to make the deployed system reproducible, easier to debug, and easier to explain during a project review.
+
+### Railway Service Layout
+
+The production backend is expected to run as two Railway services in the same Railway project:
+
+| Railway service | Purpose | Notes |
+|---|---|---|
+| FastAPI backend service | Runs the API, AI evaluation dispatcher, Gmail OAuth callback, Gmail sender, and Alembic migrations at startup | Deployed from the `backend/` folder of the repository |
+| PostgreSQL service | Stores users, subjects, projects, enrollments, submissions, evaluations, Gmail accounts, and email logs | Provides the `DATABASE_URL` used by the backend |
+
+The frontend is not served by Railway in the current deployment model. It is deployed separately as a static Vite app, usually on Vercel, and communicates with the Railway backend through `VITE_API_URL`.
+
+### Backend Start Command
+
+The Railway backend service uses the start command already declared in `backend/railway.json`:
+
+```bash
+alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+This command does two important things:
+
+1. Applies all pending Alembic migrations to the production PostgreSQL database before the API starts.
+2. Starts Uvicorn on `0.0.0.0` using the `$PORT` injected by Railway.
+
+Do not hard-code a port in production. Railway provides the runtime port through the `PORT` environment variable.
+
+### Railway Backend Variables
+
+These variables must be configured on the Railway FastAPI backend service, not only on the PostgreSQL service.
+
+| Variable | Production value |
+|---|---|
+| `DATABASE_URL` | Railway PostgreSQL connection URL. Prefer the internal/private Railway URL when the backend and PostgreSQL services are in the same Railway project. |
+| `SECRET_KEY` | Long random secret used for JWT signing and OAuth state signing. |
+| `ALGORITHM` | Usually `HS256`. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT expiration window, for example `10080`. |
+| `GOOGLE_CLIENT_ID` | Google OAuth web client ID. |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth web client secret. |
+| `GOOGLE_REDIRECT_URI` | `https://your-railway-backend-domain/auth/gmail/callback`. Must exactly match Google Cloud Console. |
+| `GEMINI_API_KEY` | Gemini API key used by the evaluator. |
+| `FERNET_KEY` | Fernet key used to encrypt Gmail OAuth credentials. Keep the same value for the lifetime of the deployed database. |
+| `BACKEND_URL` | Public Railway backend URL, for example `https://your-railway-backend-domain`. |
+| `FRONTEND_URL` | Public frontend URL, for example `https://your-vercel-app.vercel.app`. |
+| `ALLOWED_ORIGINS` | Comma-separated frontend origins allowed by CORS, usually the Vercel URL plus local dev origins if needed. |
+| `GEMINI_MODEL` | Optional model override used by the evaluator. |
+| `GEMINI_FALLBACK_MODEL` | Optional fallback model override. |
+
+Do not set `OAUTHLIB_INSECURE_TRANSPORT=1` in production. That variable is only for local HTTP OAuth development.
+
+### Railway PostgreSQL Variables
+
+Railway PostgreSQL exposes database connection variables such as `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`, and `DATABASE_URL`. The backend only needs `DATABASE_URL` as long as the settings layer continues to derive the async and sync SQLAlchemy URLs from it.
+
+Important production rule: if the backend and PostgreSQL database are both on Railway, use the Railway-provided internal/private connection string for the deployed backend. Use the public database URL only for local administration tasks from your own machine.
+
+### Vercel Variable Coupled to Railway
+
+The frontend must know where the Railway backend is deployed. In Vercel, configure:
+
+```text
+VITE_API_URL=https://your-railway-backend-domain
+```
+
+After changing `VITE_API_URL`, redeploy the Vercel frontend. Vite injects environment variables at build time, so changing the variable without redeploying the frontend will not update the built app.
+
+### Google OAuth Production Configuration
+
+Gmail OAuth depends on exact URL matching. Configure these values in Google Cloud Console:
+
+| Google Cloud field | Required value |
+|---|---|
+| Authorized redirect URI | `https://your-railway-backend-domain/auth/gmail/callback` |
+| Authorized JavaScript origin | `https://your-vercel-frontend-domain` |
+
+The value of `GOOGLE_REDIRECT_URI` in Railway must match the authorized redirect URI exactly, including `https`, domain, path, and trailing slash behavior. A mismatch will usually break the Gmail connection popup with a `redirect_uri_mismatch` error.
+
+### Recommended Railway Deployment Sequence
+
+1. Create a Railway project.
+2. Add a PostgreSQL service inside the Railway project.
+3. Add a backend service from the GitHub repository.
+4. If Railway imports the repository as a monorepo, set the backend service root directory to `backend/`.
+5. Configure all backend environment variables on the backend service.
+6. Make sure `DATABASE_URL` on the backend service points to the Railway PostgreSQL database.
+7. Deploy the backend service.
+8. Open the backend public URL and verify `/health` returns a healthy response.
+9. Verify `/docs` loads the FastAPI Swagger UI.
+10. Add the Railway callback URL to Google Cloud Console.
+11. Deploy the frontend with `VITE_API_URL` pointing to the Railway backend.
+12. Test Gmail connection from `/professor/settings` on the production frontend.
+13. Run the full production smoke test.
+
+### Useful Railway CLI Commands
+
+Use these commands from the repository when debugging or managing the deployed backend.
+
+```bash
+railway login
+railway link
+railway variables
+railway logs
+railway open
+```
+
+If deploying directly from the CLI instead of relying on GitHub deployments:
+
+```bash
+railway up
+```
+
+If you need to run a local command with Railway environment variables loaded, use:
+
+```bash
+railway run <command>
+```
+
+For example, from the `backend/` folder:
+
+```bash
+railway run alembic upgrade head
+```
+
+The normal deployment path should not require this manual migration command because the Railway start command already runs `alembic upgrade head` before starting Uvicorn.
+
+### Production Health Checks
+
+Use these URLs after every backend deployment:
+
+```text
+https://your-railway-backend-domain/health
+https://your-railway-backend-domain/docs
+```
+
+Expected result:
+
+- `/health` returns a successful health response.
+- `/docs` loads Swagger UI.
+- The browser console on the frontend shows no CORS errors.
+- Login and `/auth/me` work from the deployed frontend.
+
+### Railway Troubleshooting
+
+| Symptom | Most likely cause | Fix |
+|---|---|---|
+| Backend deploys but crashes immediately | Missing environment variable or failed migration | Check `railway logs`, verify all backend variables, then inspect Alembic error output |
+| `/docs` works but frontend API calls fail | CORS misconfiguration | Add the exact Vercel frontend URL to `ALLOWED_ORIGINS` and redeploy backend |
+| Gmail popup fails with `redirect_uri_mismatch` | Railway `GOOGLE_REDIRECT_URI` does not exactly match Google Cloud Console | Copy the production callback URL exactly into both places |
+| Gmail account connects locally but not in production | Google OAuth production URL not configured | Add Railway backend callback and Vercel JavaScript origin in Google Cloud Console |
+| Emails are not sent after submission | No Gmail account assigned or token problem | Check project Gmail assignment, subject default account, professor connected accounts, and `EmailLog` entries |
+| `Invalid encrypted payload or wrong FERNET_KEY` | Production `FERNET_KEY` changed after Gmail accounts were stored | Restore the original `FERNET_KEY` or reconnect Gmail accounts |
+| AI evaluation fails | Missing/invalid `GEMINI_API_KEY`, unavailable model, malformed Gemini response, or quota issue | Check Railway logs and run the Gemini connection script locally with the same variables |
+| Production DB appears empty | Backend is connected to a different `DATABASE_URL` than expected | Inspect Railway backend variables and confirm the linked PostgreSQL service |
+| Vercel still calls the old backend | `VITE_API_URL` changed but frontend was not redeployed | Redeploy the Vercel project after editing the variable |
+
+### Railway Deployment Notes for Demonstration
+
+Before a live demo or academic evaluation:
+
+- Confirm the Railway backend is awake and responsive.
+- Open `/health` and `/docs` before starting the demo.
+- Send a Gmail test email from Settings.
+- Keep Railway logs open while running the smoke test.
+- Use fresh professor and student accounts to avoid confusing old test data.
+- Do not reset the production database unless you have exported or no longer need existing demo data.
+
+---
+
 ## Production Smoke Test Checklist
 
 - [ ] Open the production frontend URL.
@@ -1108,20 +1273,6 @@ npm run audit:week6-day3
 
 It scans UI files for visible loading states, error states, cleanup/finally behavior, and email-specific user messages around OAuth, test emails, and submission email failures.
 
----
-
-## Known Limitations
-
-- No root-level README was detected before this generated README; existing documentation is distributed across `docs/` and the frontend README.
-- The data model supports overdue states, and the UI displays overdue status when present, but no dedicated scheduler or background job was found that automatically marks unlocked deliverables as overdue after seven days.
-- `deadline_at` is stored on submission creation. There is no separate unlock timestamp model for measuring the full one-week window before a student submits the next deliverable.
-- AI evaluation runs as a FastAPI background task, not through a durable queue. If the server process stops during evaluation, a job queue would be more reliable.
-- The evaluator depends on Gemini API availability, quotas, and model behavior.
-- Live Gemini tests are intentionally skipped unless explicitly enabled because they call an external paid or quota-limited service.
-- Gmail sending depends on connected Gmail accounts and Google OAuth configuration.
-- Subject-level Gmail default clearing is not fully supported by the current frontend/backend flow; the Settings UI reports this explicitly.
-- One submissions route, `/submissions/enrollment/{enrollment_id}`, should be verified locally because it is declared after the dynamic `/submissions/{submission_id}` route.
-- There is no evidence of an administrator role beyond student and professor.
 
 ---
 
@@ -1164,6 +1315,13 @@ The result is a credible, end-to-end, production-oriented academic platform that
 
 ## Author
 
-**Ángel Pérez Castro**
+| Field | Value |
+| --- | --- |
+| Name | Ángel Pérez Castro |
+| GitHub | [angelperezcastro](https://github.com/angelperezcastro) |
+| LinkedIn | [Ángel Pérez Castro](www.linkedin.com/in/ángel-pérez-castro-50ab12339) |
+| Email | angelpeka04@gmail.com |
+
+
 
 Software Engineering project — AI-powered auto-grading platform for academic deliverables.
